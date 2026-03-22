@@ -1,18 +1,21 @@
-from app.services.domain_classifier import detect_domain
+from app.services.ai_classifier import classify_query
 from app.services.pubmed import search_pubmed
 from app.services.search import search_web
 
 
 def route_research(topic: str):
-    domain = detect_domain(topic)
+    decision = classify_query(topic)
 
-    if domain == "healthcare":
+    source = decision["source"]
+
+    if source == "pubmed":
         data = search_pubmed(topic)
 
     else:
-        data = search_web(topic)
+        data = search_web(f"{topic} research report analysis data")
 
     return {
-        "domain": domain,
+        "domain": decision["domain"],
+        "source": source,
         "data": data
     }
