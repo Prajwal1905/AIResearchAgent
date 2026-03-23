@@ -17,7 +17,7 @@ Example:
     response = generate_text(prompt)
 
     try:
-        sections = eval(response)  # simple parsing (we improve later)
+        sections = eval(response) 
     except:
         sections = ["Introduction", "Main Content", "Conclusion"]
 

@@ -10,9 +10,18 @@ from fastapi.responses import FileResponse
 from app.agents.followup import answer_followup
 from app.agents.perspective import generate_perspectives
 from app.agents.comparator import compare_topics
+from fastapi.middleware.cors import CORSMiddleware 
 from pydantic import BaseModel
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class FollowUpRequest(BaseModel):
     question: str
