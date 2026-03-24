@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse
 from app.agents.followup import answer_followup
 from app.agents.perspective import generate_perspectives
 from app.agents.comparator import compare_topics
+from app.agents.fact_checker import fact_check_section
 from fastapi.middleware.cors import CORSMiddleware 
 from pydantic import BaseModel
 
@@ -35,7 +36,8 @@ def format_references(data):
             "id": i,
             "title": item.get("title"),
             "source": item.get("source"),
-            "date": item.get("date")
+            "date": item.get("date"),
+            "url":item.get("url")
         })
     return refs
 
@@ -45,36 +47,60 @@ def home():
 
 
 @app.post("/generate-report")
-def generate_report(data: TopicRequest):
-    # detect comparison query
-    if " vs " in data.topic.lower():
-        comparison = compare_topics(data.topic)
+async def generate_report(data: TopicRequest):
+    try:
+        # comparison mode
+        if " vs " in data.topic.lower():
+            comparison = compare_topics(data.topic)
+            return {
+                "topic": data.topic,
+                "type": "comparison",
+                "result": comparison
+            }
+
+        sections = create_plan(data.topic)
+        research_result = research_topic(data.topic)
+
+        report = {}
+        previous_content = ""
+
+        for section in sections:
+            content = write_section(
+                data.topic,
+                section,
+                research_result,
+                previous_content
+            )
+
+            checked_content = fact_check_section(
+                data.topic,
+                section,
+                content,
+                research_result.get("data", [])
+            )
+
+            report[section] = checked_content
+
+            
+            previous_content += f"\n{section}:\n{checked_content}\n"
+
+        analysis = generate_critical_analysis(data.topic, research_result)
+        perspectives = generate_perspectives(data.topic, research_result)
+
         return {
-           "topic": data.topic,
-           "type": "comparison",
-           "result": comparison
+            "type": "research",
+            "topic": data.topic,
+            "domain": research_result.get("domain"),
+            "source": research_result.get("source"),
+            "sections": report,
+            "perspectives": perspectives,
+            "critical_analysis": analysis,
+            "references": format_references(research_result.get("data", [])),
         }
-    sections = create_plan(data.topic)
-    research_result = research_topic(data.topic)
 
-    report = {}
-
-    for section in sections:
-        content = write_section(data.topic, section, research_result)
-        report[section] = content
-
-    analysis = generate_critical_analysis(data.topic, research_result)
-    perspectives = generate_perspectives(data.topic, research_result)
-    return {
-        "topic": data.topic,
-        "domain": research_result["domain"],
-        "source": research_result["source"],
-        "sections": report,
-        "perspectives": perspectives,
-        "critical_analysis": analysis,
-        "references": format_references(research_result["data"])
-    }
-
+    except Exception as e:
+        return {"error": str(e)}
+    
 @app.post("/ask-followup")
 def ask_followup(data: FollowUpRequest):
     answer = answer_followup(data.question, data.report)
@@ -83,3 +109,14 @@ def ask_followup(data: FollowUpRequest):
         "question": data.question,
         "answer": answer
     }
+
+@app.post("/download-pdf")
+def download_pdf(data: dict):
+    try:
+        file_path = generate_pdf(
+            data.get("topic"),
+            data.get("sections")   
+        )
+        return FileResponse(file_path, filename="report.pdf")
+    except Exception as e:
+        return {"error": str(e)}

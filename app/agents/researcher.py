@@ -3,8 +3,59 @@ from app.services.scraper import scrape_url
 from app.agents.summarizer import summarize_text
 from app.services.pubmed import search_pubmed
 from app.services.research_router import route_research
+from app.services.credibility import get_credibility_score
+
 
 def research_topic(topic: str):
-    result = route_research(topic)
+    #  Step 1: Route research (domain-specific logic)
+    routed_result = route_research(topic)
 
-    return result
+    raw_data = routed_result.get("data", [])
+    domain = routed_result.get("domain", "general")
+    source = routed_result.get("source", "mixed")
+
+    enriched_data = []
+
+    for item in raw_data:
+        url = item.get("url")
+
+        try:
+            #  Step 2: Scrape content
+            content = scrape_url(url)
+
+            if not content or len(content) < 200:
+                continue
+
+            #  Step 3: Summarize content
+            summary = summarize_text(content)
+
+            #  Step 4: Credibility check
+            credibility_score = get_credibility_score(url)
+
+            enriched_data.append({
+                "title": item.get("title"),
+                "url": url,
+                "summary": summary,
+                "credibility": credibility_score,
+                "source": item.get("source"),
+                "date": item.get("date")
+            })
+
+        except Exception:
+            continue
+
+    #  Step 5: Sort by credibility
+    enriched_data = sorted(
+        enriched_data,
+        key=lambda x: x["credibility"],
+        reverse=True
+    )
+
+    #  Step 6: Limit top results
+    top_data = enriched_data[:5]
+
+    return {
+        "domain": domain,
+        "source": source,
+        "data": top_data
+    }
