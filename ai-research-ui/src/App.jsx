@@ -7,14 +7,19 @@ function App() {
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastReport, setLastReport] = useState(null);
-
+  const [customFormat, setCustomFormat] = useState("");
   const endRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat]);
 
-  //  SEND MESSAGE
+  
+  useEffect(() => {
+    console.log("CHAT STATE:", chat);
+  }, [chat]);
+
+  
   const handleSend = async () => {
     if (!input) return;
 
@@ -25,7 +30,7 @@ function App() {
       let res, data;
 
       if (lastReport) {
-        // Follow-up mode
+        
         res = await fetch("http://127.0.0.1:8000/ask-followup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -36,36 +41,69 @@ function App() {
         });
 
         data = await res.json();
+        console.log("FOLLOWUP RESPONSE:", data);
 
-        setChat((prev) => [...prev, { role: "ai", text: data.answer }]);
+        setChat((prev) => [
+          ...prev,
+          { role: "ai", text: data.answer || "No answer returned." },
+        ]);
       } else {
-        // Generate report
+        
         res = await fetch("http://127.0.0.1:8000/generate-report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ topic: input }),
+          custom_format: customFormat || null,
         });
 
         data = await res.json();
+        console.log("REPORT RESPONSE:", data);
+
+        
+        if (data.error) {
+          setChat((prev) => [
+            ...prev,
+            { role: "ai", text: " Error: " + data.error },
+          ]);
+          return;
+        }
+
+        
+        if (!data.sections || Object.keys(data.sections).length === 0) {
+          setChat((prev) => [
+            ...prev,
+            {
+              role: "ai",
+              text: " No content generated. Try another topic.",
+            },
+          ]);
+          return;
+        }
+
         setLastReport(data);
 
         setChat((prev) => [...prev, { role: "ai", data: data }]);
       }
-    } catch {
-      alert("Backend error");
+    } catch (err) {
+      console.error(err);
+      setChat((prev) => [
+        ...prev,
+        { role: "ai", text: " Backend connection failed." },
+      ]);
     }
 
     setInput("");
     setLoading(false);
   };
 
-  //  NEW CHAT
+  
   const handleNewChat = () => {
     setChat([]);
     setLastReport(null);
+    setCustomFormat("");
   };
 
-  //  DOWNLOAD PDF
+  
   const handleDownloadPDF = async () => {
     if (!lastReport) return;
 
@@ -78,7 +116,21 @@ function App() {
         body: JSON.stringify(lastReport),
       });
 
+      
+      if (!res.ok) {
+        const err = await res.json();
+        alert("PDF Error: " + err.error);
+        return;
+      }
+
       const blob = await res.blob();
+
+      
+      if (blob.type !== "application/pdf") {
+        alert("Invalid PDF received");
+        return;
+      }
+
       const url = window.URL.createObjectURL(blob);
 
       const a = document.createElement("a");
@@ -87,17 +139,15 @@ function App() {
       a.click();
 
       window.URL.revokeObjectURL(url);
-    } catch {
+    } catch (e) {
+      console.error(e);
       alert("Failed to download PDF");
     }
   };
-
   return (
     <div className="bg-[#0b0f19] text-gray-200 min-h-screen flex flex-col">
       
-      {/* Header */}
       <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center text-sm text-gray-400">
-        
         <div className="flex gap-4 items-center">
           <span>AI Research Assistant</span>
 
@@ -111,17 +161,13 @@ function App() {
           )}
         </div>
 
-        <button
-          onClick={handleNewChat}
-          className="text-xs hover:text-white"
-        >
+        <button onClick={handleNewChat} className="text-xs hover:text-white">
           New Chat
         </button>
       </div>
 
-      {/* Chat */}
+      
       <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-8 space-y-8">
-        
         {chat.length === 0 && (
           <div className="text-center mt-32 text-gray-500 text-xl">
             Ask anything...
@@ -137,13 +183,12 @@ function App() {
             </div>
           ) : (
             <div key={i} className="space-y-6 leading-relaxed">
-
-              {/* Copy */}
+              
               <div className="text-right">
                 <button
                   onClick={() =>
                     navigator.clipboard.writeText(
-                      msg.text || JSON.stringify(msg.data)
+                      msg.text || JSON.stringify(msg.data),
                     )
                   }
                   className="text-xs text-gray-500 hover:text-white"
@@ -152,7 +197,7 @@ function App() {
                 </button>
               </div>
 
-              {/* Follow-up */}
+              
               {msg.text && (
                 <div className="prose prose-invert">
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
@@ -161,23 +206,23 @@ function App() {
                 </div>
               )}
 
-              {/* Sections */}
-              {msg.data &&
-                Object.entries(msg.data.sections || {}).map(([key, value]) => (
+              
+              {msg.data?.sections &&
+                Object.entries(msg.data.sections).map(([key, value]) => (
                   <div key={key}>
                     <h2 className="text-lg font-semibold text-white mb-2">
                       {key}
                     </h2>
                     <div className="prose prose-invert text-gray-400">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                        {value}
+                        {value || "No content"}
                       </ReactMarkdown>
                     </div>
                   </div>
                 ))}
 
-              {/* Perspectives */}
-              {msg.data && (
+              
+              {msg.data?.perspectives && (
                 <div>
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Perspectives
@@ -190,8 +235,8 @@ function App() {
                 </div>
               )}
 
-              {/* Analysis */}
-              {msg.data && (
+              
+              {msg.data?.critical_analysis && (
                 <div>
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Critical Analysis
@@ -204,8 +249,8 @@ function App() {
                 </div>
               )}
 
-              {/* References */}
-              {msg.data?.references && (
+              
+              {msg.data?.references?.length > 0 && (
                 <div>
                   <h2 className="text-lg font-semibold text-white mb-2">
                     References
@@ -229,10 +274,10 @@ function App() {
                 </div>
               )}
             </div>
-          )
+          ),
         )}
 
-        {/* Loading */}
+        
         {loading && (
           <div className="text-center text-gray-400 animate-pulse">
              Generating research...
@@ -242,22 +287,31 @@ function App() {
         <div ref={endRef} />
       </div>
 
-      {/* Input */}
+      
       <div className="border-t border-gray-800 p-4 bg-[#0b0f19]">
-        <div className="max-w-2xl mx-auto flex gap-2">
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Ask anything..."
-            className="flex-1 bg-gray-800 px-4 py-3 rounded-xl outline-none text-white placeholder-gray-500"
+        <div className="max-w-2xl mx-auto flex flex-col gap-2">
+          <textarea
+            value={customFormat}
+            onChange={(e) => setCustomFormat(e.target.value)}
+            placeholder="Paste research format (college format)"
+            className="w-full bg-gray-800 px-4 py-2 rounded-xl text-white placeholder-gray-500 outline-none"
           />
-          <button
-            onClick={handleSend}
-            className="bg-white text-black px-5 rounded-xl font-medium"
-          >
-            Send
-          </button>
+
+          <div className="flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="Ask anything..."
+              className="flex-1 bg-gray-800 px-4 py-3 rounded-xl outline-none text-white placeholder-gray-500"
+            />
+            <button
+              onClick={handleSend}
+              className="bg-white text-black px-5 rounded-xl font-medium"
+            >
+              Send
+            </button>
+          </div>
         </div>
       </div>
     </div>
