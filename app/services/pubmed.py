@@ -37,7 +37,8 @@ def search_pubmed(query: str, max_results: int = 3):
         papers.append({
             "title": paper.get("title"),
             "date": paper.get("pubdate"),
-            "source": paper.get("source")
+            "source": paper.get("source"),
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pid}/"
         })
 
     return papers

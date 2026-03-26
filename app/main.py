@@ -107,6 +107,7 @@ async def generate_report(data: TopicRequest):
            f"[{ref['id']}] {ref['title']} ({ref['url']})"
            for ref in references_list
         ])
+        print(format_references(research_result.get("data", [])))
         return {
             "type": "research",
             "topic": data.topic,

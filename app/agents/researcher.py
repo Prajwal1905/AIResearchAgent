@@ -18,6 +18,8 @@ def research_topic(topic: str):
 
     for item in raw_data:
         url = item.get("url")
+        if not url:
+            url="https://www.google.com"
 
         try:
             
