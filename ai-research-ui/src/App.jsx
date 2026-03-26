@@ -222,7 +222,7 @@ function App() {
                     remarkPlugins={[remarkGfm]}
                     components={{
                       text({ children }) {
-                        const text = children[0];
+                        const text = children.join("");
 
                         if (typeof text !== "string") return text;
 
@@ -274,7 +274,7 @@ function App() {
                         remarkPlugins={[remarkGfm]}
                         components={{
                           text({ children }) {
-                            const text = children[0];
+                            const text = children.join("");
 
                             if (typeof text !== "string") return text;
 
@@ -330,7 +330,7 @@ function App() {
                       remarkPlugins={[remarkGfm]}
                       components={{
                         text({ children }) {
-                          const text = children[0];
+                          const text = children.join("");
                           if (typeof text !== "string") return text;
 
                           const parts = text.split(/(\[\d+\])/g);
@@ -384,7 +384,7 @@ function App() {
                       remarkPlugins={[remarkGfm]}
                       components={{
                         text({ children }) {
-                          const text = children[0];
+                          const text = children.join("");
                           if (typeof text !== "string") return text;
 
                           const parts = text.split(/(\[\d+\])/g);
