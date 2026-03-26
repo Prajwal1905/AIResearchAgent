@@ -1,13 +1,23 @@
 from docx import Document
-from docx.shared import Pt
 import re
 
 
-#  FORMAT MARKDOWN 
+
 def format_markdown(text):
-    # bold
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     return text
+
+
+
+def attach_links(text, references):
+    def repl(match):
+        num = int(match.group(1))
+        if num <= len(references):
+            url = references[num - 1]["url"]
+            return f"[{num}] ({url})"
+        return match.group(0)
+
+    return re.sub(r"\[(\d+)\]", repl, text)
 
 
 
@@ -18,14 +28,13 @@ def process_text(doc, text):
     while i < len(lines):
         line = lines[i]
 
-        # TABLE 
+        # -------- TABLE --------
         if "|" in line:
             table_data = []
 
             while i < len(lines) and "|" in lines[i]:
                 row = [cell.strip() for cell in lines[i].split("|") if cell.strip()]
 
-                # skip ---- row
                 if row and not all(set(cell) <= {"-"} for cell in row):
                     table_data.append(row)
 
@@ -39,12 +48,8 @@ def process_text(doc, text):
 
                 for r in range(rows):
                     for c in range(cols):
-                        cell_text = table_data[r][c]
-
-
-                        cell_text = re.sub(r"\[(\d+)\]", r"[\1]", cell_text)
-
-                        table.rows[r].cells[c].text = format_markdown(cell_text)
+                        cell_text = format_markdown(table_data[r][c])
+                        table.rows[r].cells[c].text = cell_text
 
             continue
 
@@ -73,11 +78,14 @@ def generate_docx(topic: str, report: dict, filename="research_paper.docx"):
     # Author
     doc.add_paragraph("AI Research Assistant")
 
+    references = report.get("references", [])
+
     # Sections
     for i, (section, text) in enumerate(report.items(), start=1):
         doc.add_heading(f"{i}. {section}", level=2)
 
-        process_text(doc, text)
+        text_with_links = attach_links(text, references)
+        process_text(doc, text_with_links)
 
     doc.save(filename)
 

@@ -104,15 +104,10 @@ FORMAT RULES:
 - Use structured tables where possible
 - Prefer comparison tables over long text
 
-VERIFICATION RULES:
- Verified Insight:
-- Must be supported by references [1], [2]
-
- Assumed / Theoretical:
-- Based on reasoning or inference
-- Use when no direct citation exists
-
-- Clearly separate both types
+CITATION RULES:
+- Use references like [1], [2] where relevant
+- Do NOT label content as verified or assumed
+- Integrate citations naturally into sentences
 """
     return generate_text(prompt)
 
