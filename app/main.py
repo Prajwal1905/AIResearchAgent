@@ -12,7 +12,9 @@ from app.agents.perspective import generate_perspectives
 from app.agents.comparator import compare_topics
 from app.agents.fact_checker import fact_check_section
 from fastapi.middleware.cors import CORSMiddleware 
+from app.utils.docx_generator import generate_docx
 from pydantic import BaseModel
+import os
 
 app = FastAPI()
 
@@ -49,7 +51,7 @@ def home():
 @app.post("/generate-report")
 async def generate_report(data: TopicRequest):
     try:
-        # comparison mode
+       
         if " vs " in data.topic.lower():
             comparison = compare_topics(data.topic)
             return {
@@ -58,11 +60,22 @@ async def generate_report(data: TopicRequest):
                 "result": comparison
             }
 
-        sections = create_plan(data.topic)
-        research_result = research_topic(data.topic)
+        sections = create_plan(data.topic,data.custom_format)
+        try:
+            research_result = research_topic(data.topic)
+        except Exception as e:
+            print("RESEARCH ERROR:", e)
+            research_result = {
+                "domain": "General",
+                "source": "Fallback",
+                "data": []
+            }
 
         report = {}
         previous_content = ""
+
+        if not isinstance(sections, list):
+            sections = ["Introduction", "Methodology", "Findings", "Conclusion"]
 
         for section in sections:
             content = write_section(
@@ -86,7 +99,14 @@ async def generate_report(data: TopicRequest):
 
         analysis = generate_critical_analysis(data.topic, research_result)
         perspectives = generate_perspectives(data.topic, research_result)
+        
+        
+        references_list = format_references(research_result.get("data", []))
 
+        report["References"] = "\n".join([
+           f"[{ref['id']}] {ref['title']} ({ref['url']})"
+           for ref in references_list
+        ])
         return {
             "type": "research",
             "topic": data.topic,
@@ -115,8 +135,40 @@ def download_pdf(data: dict):
     try:
         file_path = generate_pdf(
             data.get("topic"),
-            data.get("sections")   
+            data.get("sections")
         )
-        return FileResponse(file_path, filename="report.pdf")
+
+        
+        if not os.path.exists(file_path):
+            return {"error": "PDF not generated"}
+
+        return FileResponse(
+            path=file_path,
+            filename="research_report.pdf",
+            media_type="application/pdf"   
+        )
+
     except Exception as e:
+        print("PDF ERROR:", e)
+        return {"error": str(e)}
+    
+@app.post("/download-docx")
+def download_docx(data: dict):
+    try:
+        file_path = generate_docx(
+            data.get("topic"),
+            data.get("sections")
+        )
+
+        if not os.path.exists(file_path):
+            return {"error": "DOCX not generated"}
+
+        return FileResponse(
+            path=file_path,
+            filename="research_report.docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+
+    except Exception as e:
+        print("DOCX ERROR:", e)
         return {"error": str(e)}

@@ -14,15 +14,10 @@ function App() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat]);
 
-  
-  useEffect(() => {
-    console.log("CHAT STATE:", chat);
-  }, [chat]);
-
-  
   const handleSend = async () => {
     if (!input) return;
-
+    const userInput = input;
+    setInput("");
     setChat((prev) => [...prev, { role: "user", text: input }]);
     setLoading(true);
 
@@ -30,36 +25,30 @@ function App() {
       let res, data;
 
       if (lastReport) {
-        
         res = await fetch("http://127.0.0.1:8000/ask-followup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            question: input,
+            question: userInput,
             report: lastReport,
           }),
         });
 
         data = await res.json();
-        console.log("FOLLOWUP RESPONSE:", data);
 
         setChat((prev) => [
           ...prev,
           { role: "ai", text: data.answer || "No answer returned." },
         ]);
       } else {
-        
         res = await fetch("http://127.0.0.1:8000/generate-report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic: input }),
-          custom_format: customFormat || null,
+          body: JSON.stringify({ topic: userInput }),
         });
 
         data = await res.json();
-        console.log("REPORT RESPONSE:", data);
 
-        
         if (data.error) {
           setChat((prev) => [
             ...prev,
@@ -68,7 +57,6 @@ function App() {
           return;
         }
 
-        
         if (!data.sections || Object.keys(data.sections).length === 0) {
           setChat((prev) => [
             ...prev,
@@ -81,7 +69,6 @@ function App() {
         }
 
         setLastReport(data);
-
         setChat((prev) => [...prev, { role: "ai", data: data }]);
       }
     } catch (err) {
@@ -92,18 +79,15 @@ function App() {
       ]);
     }
 
-    setInput("");
     setLoading(false);
   };
 
-  
   const handleNewChat = () => {
     setChat([]);
     setLastReport(null);
     setCustomFormat("");
   };
 
-  
   const handleDownloadPDF = async () => {
     if (!lastReport) return;
 
@@ -116,7 +100,6 @@ function App() {
         body: JSON.stringify(lastReport),
       });
 
-      
       if (!res.ok) {
         const err = await res.json();
         alert("PDF Error: " + err.error);
@@ -124,12 +107,6 @@ function App() {
       }
 
       const blob = await res.blob();
-
-      
-      if (blob.type !== "application/pdf") {
-        alert("Invalid PDF received");
-        return;
-      }
 
       const url = window.URL.createObjectURL(blob);
 
@@ -144,20 +121,64 @@ function App() {
       alert("Failed to download PDF");
     }
   };
+
+  const handleDownloadDOCX = async () => {
+    if (!lastReport) return;
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/download-docx", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(lastReport),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        alert("DOCX Error: " + err.error);
+        return;
+      }
+
+      const blob = await res.blob();
+
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "research_report.docx";
+      a.click();
+
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to download DOCX");
+    }
+  };
+
   return (
     <div className="bg-[#0b0f19] text-gray-200 min-h-screen flex flex-col">
-      
+      {/* HEADER */}
       <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center text-sm text-gray-400">
         <div className="flex gap-4 items-center">
           <span>AI Research Assistant</span>
 
           {lastReport && (
-            <button
-              onClick={handleDownloadPDF}
-              className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-            >
-              Download PDF
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={handleDownloadPDF}
+                className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
+              >
+                Download PDF
+              </button>
+
+              <button
+                onClick={handleDownloadDOCX}
+                className="text-xs bg-blue-700 px-2 py-1 rounded hover:bg-blue-600"
+              >
+                Download Word
+              </button>
+            </div>
           )}
         </div>
 
@@ -166,7 +187,6 @@ function App() {
         </button>
       </div>
 
-      
       <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-8 space-y-8">
         {chat.length === 0 && (
           <div className="text-center mt-32 text-gray-500 text-xl">
@@ -183,7 +203,6 @@ function App() {
             </div>
           ) : (
             <div key={i} className="space-y-6 leading-relaxed">
-              
               <div className="text-right">
                 <button
                   onClick={() =>
@@ -197,16 +216,53 @@ function App() {
                 </button>
               </div>
 
-              
               {msg.text && (
                 <div className="prose prose-invert">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      text({ children }) {
+                        const text = children[0];
+
+                        if (typeof text !== "string") return text;
+
+                        const parts = text.split(/(\[\d+\])/g);
+
+                        return parts.map((part, i) => {
+                          const match = part.match(/\[(\d+)\]/);
+
+                          if (match) {
+                            const refId = parseInt(match[1]);
+
+                            const references =
+                              msg.data?.references || lastReport?.references;
+                            const ref = references?.find((r) => r.id === refId);
+
+                            if (ref) {
+                              return (
+                                <a
+                                  key={i}
+                                  href={ref.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-400 underline"
+                                >
+                                  [{refId}]
+                                </a>
+                              );
+                            }
+                          }
+
+                          return part;
+                        });
+                      },
+                    }}
+                  >
                     {msg.text}
                   </ReactMarkdown>
                 </div>
               )}
 
-              
               {msg.data?.sections &&
                 Object.entries(msg.data.sections).map(([key, value]) => (
                   <div key={key}>
@@ -214,42 +270,164 @@ function App() {
                       {key}
                     </h2>
                     <div className="prose prose-invert text-gray-400">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                          text({ children }) {
+                            const text = children[0];
+
+                            if (typeof text !== "string") return text;
+
+                            const parts = text.split(/(\[\d+\])/g);
+
+                            return parts.map((part, i) => {
+                              const match = part.match(/\[(\d+)\]/);
+
+                              if (match) {
+                                const refId = parseInt(match[1]);
+
+                                const references =
+                                  msg.data?.references ||
+                                  lastReport?.references;
+
+                                const ref = references?.find(
+                                  (r) => r.id === refId,
+                                );
+
+                                if (ref) {
+                                  return (
+                                    <a
+                                      key={i}
+                                      href={ref.url}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="text-blue-400 underline"
+                                    >
+                                      [{refId}]
+                                    </a>
+                                  );
+                                }
+                              }
+
+                              return part;
+                            });
+                          },
+                        }}
+                      >
                         {value || "No content"}
                       </ReactMarkdown>
                     </div>
                   </div>
                 ))}
 
-              
               {msg.data?.perspectives && (
                 <div>
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Perspectives
                   </h2>
                   <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        text({ children }) {
+                          const text = children[0];
+                          if (typeof text !== "string") return text;
+
+                          const parts = text.split(/(\[\d+\])/g);
+
+                          return parts.map((part, i) => {
+                            const match = part.match(/\[(\d+)\]/);
+
+                            if (match) {
+                              const refId = parseInt(match[1]);
+
+                              const references =
+                                msg.data?.references || lastReport?.references;
+
+                              const ref = references?.find(
+                                (r) => r.id === refId,
+                              );
+
+                              if (ref) {
+                                return (
+                                  <a
+                                    key={i}
+                                    href={ref.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-blue-400 underline"
+                                  >
+                                    [{refId}]
+                                  </a>
+                                );
+                              }
+                            }
+
+                            return part;
+                          });
+                        },
+                      }}
+                    >
                       {msg.data.perspectives}
                     </ReactMarkdown>
                   </div>
                 </div>
               )}
 
-              
               {msg.data?.critical_analysis && (
                 <div>
                   <h2 className="text-lg font-semibold text-white mb-2">
                     Critical Analysis
                   </h2>
                   <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        text({ children }) {
+                          const text = children[0];
+                          if (typeof text !== "string") return text;
+
+                          const parts = text.split(/(\[\d+\])/g);
+
+                          return parts.map((part, i) => {
+                            const match = part.match(/\[(\d+)\]/);
+
+                            if (match) {
+                              const refId = parseInt(match[1]);
+
+                              const references =
+                                msg.data?.references || lastReport?.references;
+
+                              const ref = references?.find(
+                                (r) => r.id === refId,
+                              );
+
+                              if (ref) {
+                                return (
+                                  <a
+                                    key={i}
+                                    href={ref.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-blue-400 underline"
+                                  >
+                                    [{refId}]
+                                  </a>
+                                );
+                              }
+                            }
+
+                            return part;
+                          });
+                        },
+                      }}
+                    >
                       {msg.data.critical_analysis}
                     </ReactMarkdown>
                   </div>
                 </div>
               )}
 
-              
               {msg.data?.references?.length > 0 && (
                 <div>
                   <h2 className="text-lg font-semibold text-white mb-2">
@@ -277,17 +455,15 @@ function App() {
           ),
         )}
 
-        
         {loading && (
           <div className="text-center text-gray-400 animate-pulse">
-             Generating research...
+            Generating research...
           </div>
         )}
 
         <div ref={endRef} />
       </div>
 
-      
       <div className="border-t border-gray-800 p-4 bg-[#0b0f19]">
         <div className="max-w-2xl mx-auto flex flex-col gap-2">
           <textarea
@@ -307,9 +483,14 @@ function App() {
             />
             <button
               onClick={handleSend}
-              className="bg-white text-black px-5 rounded-xl font-medium"
+              disabled={loading}
+              className={`px-5 rounded-xl font-medium ${
+                loading
+                  ? "bg-gray-500 text-gray-300 cursor-not-allowed"
+                  : "bg-white text-black hover:bg-gray-200"
+              }`}
             >
-              Send
+              {loading ? "Sending..." : "Send"}
             </button>
           </div>
         </div>

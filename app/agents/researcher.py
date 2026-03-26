@@ -7,7 +7,7 @@ from app.services.credibility import get_credibility_score
 
 
 def research_topic(topic: str):
-    #  Step 1: Route research (domain-specific logic)
+    
     routed_result = route_research(topic)
 
     raw_data = routed_result.get("data", [])
@@ -20,16 +20,16 @@ def research_topic(topic: str):
         url = item.get("url")
 
         try:
-            #  Step 2: Scrape content
+            
             content = scrape_url(url)
 
             if not content or len(content) < 200:
                 continue
 
-            #  Step 3: Summarize content
+            
             summary = summarize_text(content)
 
-            #  Step 4: Credibility check
+            
             credibility_score = get_credibility_score(url)
 
             enriched_data.append({
@@ -44,14 +44,14 @@ def research_topic(topic: str):
         except Exception:
             continue
 
-    #  Step 5: Sort by credibility
+    
     enriched_data = sorted(
         enriched_data,
         key=lambda x: x["credibility"],
         reverse=True
     )
 
-    #  Step 6: Limit top results
+    
     top_data = enriched_data[:5]
 
     return {

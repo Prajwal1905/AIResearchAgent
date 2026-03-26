@@ -2,7 +2,7 @@ import requests
 
 
 def search_pubmed(query: str, max_results: int = 3):
-    # Step 1: Search for paper IDs
+    
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 
     params = {
@@ -19,7 +19,7 @@ def search_pubmed(query: str, max_results: int = 3):
 
     papers = []
 
-    # Step 2: Fetch details
+    
     fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 
     fetch_params = {

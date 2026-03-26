@@ -1,42 +1,51 @@
-from ddgs import DDGS
+import requests
+from bs4 import BeautifulSoup
 from app.services.credibility import get_credibility_score
 
-def search_web(query: str, max_results: int = 5):
+
+def search_web(query: str, max_results: int = 3):
     results = []
 
-    BAD_SITES = ["zhihu", "reddit", "quora", "pinterest"]
-    seen_titles = set()
+    try:
+        url = f"https://duckduckgo.com/html/?q={query}"
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
 
-    with DDGS() as ddgs:
-        search_results = ddgs.text(query, max_results=max_results)
+        response = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
 
-        for r in search_results:
-            title = r.get("title", "")
-            link = r.get("href", "")
+        links = soup.select(".result__a")
 
-            
-            if any(bad in link.lower() for bad in BAD_SITES):
-                continue
+        for link in links[:max_results]:
+            try:
+                title = link.get_text()
+                href = link.get("href")
 
-            
-            if title in seen_titles:
-                continue
+                if not href:
+                    continue
 
-            seen_titles.add(title)
-            credibility, reason = get_credibility_score(link)
-            results.append({
-                "title": title,
-                "link": link,
-                "source": r.get("source") or "web",
-                "date": r.get("date") or "unknown",
-                "credibility": credibility,
-                "credibility_reason": reason
+                
+                cred = get_credibility_score(href)
 
+                credibility = cred.get("label")
+                reason = cred.get("category")
+                score = cred.get("score")
 
-            })
+                results.append({
+                    "title": title,
+                    "url": href,
+                    "source": "web",
+                    "date": "unknown",
+                    "credibility": credibility,
+                    "credibility_reason": reason,
+                    "credibility_score": score
+                })
 
-            
-            if len(results) >= 3:
-                break
+            except Exception as inner:
+                print("INNER LINK ERROR:", inner)
+
+    except Exception as e:
+        print("SEARCH ERROR:", e)
 
     return results

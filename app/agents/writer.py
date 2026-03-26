@@ -1,14 +1,6 @@
 from app.services.llm import generate_text
 
 
-def format_references(data):
-    references = []
-    for i, item in enumerate(data, start=1):
-        ref = f"[{i}] {item.get('title')} - {item.get('source')} ({item.get('date')})"
-        references.append(ref)
-    return references
-
-
 def write_section(
     topic: str,
     section: str,
@@ -16,13 +8,17 @@ def write_section(
     previous_content: str = ""
 ) -> str:
 
-    domain = research_result["domain"]
-    data = research_result["data"]
+    domain = research_result.get("domain", "General")
+    data = research_result.get("data", [])
 
-    references = format_references(data)
-    ref_text = "\n".join(references)
+    
+    ref_text = "\n".join([
+        f"[{i+1}] {item.get('title')} ({item.get('url')})"
+        for i, item in enumerate(data)
+        if item.get("title") and item.get("url")
+    ])
 
-    # SECTION-SPECIFIC INSTRUCTIONS
+    
     if section.lower() == "abstract":
         instruction = """
 Write a concise summary of the entire research.
@@ -72,6 +68,7 @@ Suggest future research directions and improvements.
 Write analytical content using evidence, insights, and limitations.
 """
 
+    
     prompt = f"""
 You are an expert academic research writer.
 
@@ -82,25 +79,40 @@ Domain: {domain}
 Previously written content:
 {previous_content}
 
-References:
+Available References:
 {ref_text}
 
 Instructions:
 {instruction}
 
-Rules:
-- Do NOT repeat previous content
-- Use citations like [1], [2]
-- Be deep, specific, and analytical
-- Avoid generic statements
-- Maintain academic tone
-"""
+STRICT RULES:
+- Use ONLY the given references
+- Cite using [1], [2], etc.
+- Do NOT invent citations
+- Every major claim must have a citation
+- Avoid unsupported numbers like % unless from references
+- Be analytical and precise
+- No repetition
 
+FORMAT RULES:
+- Use structured tables where possible
+- Prefer comparison tables over long text
+
+VERIFICATION RULES:
+ Verified Insight:
+- Must be supported by references [1], [2]
+
+ Assumed / Theoretical:
+- Based on reasoning or inference
+- Use when no direct citation exists
+
+- Clearly separate both types
+"""
     return generate_text(prompt)
 
 
 def generate_critical_analysis(topic: str, research_result: dict):
-    data = research_result["data"]
+    data = research_result.get("data", [])
     context = "\n".join([str(item) for item in data])
 
     prompt = f"""
