@@ -28,9 +28,9 @@ def search_web(query: str, max_results: int = 3):
                 
                 cred = get_credibility_score(href)
 
-                credibility = cred.get("label")
+                credibility = cred.get("label","Unknown")
                 reason = cred.get("category")
-                score = cred.get("score")
+                score = cred.get("score",0)
 
                 results.append({
                     "title": title,

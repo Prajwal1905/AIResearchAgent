@@ -49,7 +49,7 @@ def research_topic(topic: str):
     
     enriched_data = sorted(
         enriched_data,
-        key=lambda x: x["credibility"],
+        key=lambda x: x.get("credibility_score",0),
         reverse=True
     )
 

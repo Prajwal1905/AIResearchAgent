@@ -13,7 +13,7 @@ def write_section(
 
     
     ref_text = "\n".join([
-        f"[{i+1}] {item.get('title')} ({item.get('url')})"
+        f"[{i+1}] {item.get('title')}- {item.get('url')}"
         for i, item in enumerate(data)
         if item.get("title") and item.get("url")
     ])
@@ -79,8 +79,14 @@ Domain: {domain}
 Previously written content:
 {previous_content}
 
-Available References:
+Available References (USE THESE EXACT IDS ONLY):
 {ref_text}
+
+IMPORTANT:
+- You MUST ONLY use the reference IDs provided above
+- DO NOT invent [1], [2], etc.
+- Each citation must match EXACTLY the given references
+- If unsure, do NOT add citation
 
 Instructions:
 {instruction}
