@@ -9,14 +9,17 @@ def write_section(
 ) -> str:
 
     domain = research_result.get("domain", "General")
-    data = research_result.get("data", [])
+    references = research_result.get("references", [])
 
-    
     ref_text = "\n".join([
-        f"[{i+1}] {item.get('title')}- {item.get('url')}"
-        for i, item in enumerate(data)
-        if item.get("title") and item.get("url")
+        f"[{ref['id']}] {ref.get('title')}"
+        for ref in references
+        if ref.get("title")
     ])
+
+   
+    valid_ids = [str(ref["id"]) for ref in references]
+    valid_ids_str = ", ".join(valid_ids)
 
     
     if section.lower() == "abstract":
@@ -79,36 +82,34 @@ Domain: {domain}
 Previously written content:
 {previous_content}
 
-Available References (USE THESE EXACT IDS ONLY):
+Available References:
 {ref_text}
 
 IMPORTANT:
-- You MUST ONLY use the reference IDs provided above
-- DO NOT invent [1], [2], etc.
-- Each citation must match EXACTLY the given references
-- If unsure, do NOT add citation
+- You MUST ONLY use these reference IDs: {valid_ids_str}
+- DO NOT generate any other citations
+- DO NOT use [5], [10], etc if not listed
+- If unsure, DO NOT add citation
+
+STRICT VALIDATION:
+- Allowed citations: [{valid_ids_str}]
+- Any other citation is INVALID
 
 Instructions:
 {instruction}
 
-STRICT RULES:
-- Use ONLY the given references
-- Cite using [1], [2], etc.
+RULES:
+- Use only given references
+- Cite naturally like [1], [2]
 - Do NOT invent citations
-- Every major claim must have a citation
-- Avoid unsupported numbers like % unless from references
 - Be analytical and precise
-- No repetition
+- Avoid repetition
 
-FORMAT RULES:
-- Use structured tables where possible
-- Prefer comparison tables over long text
-
-CITATION RULES:
-- Use references like [1], [2] where relevant
-- Do NOT label content as verified or assumed
-- Integrate citations naturally into sentences
+FORMAT:
+- Use tables where useful
+- Keep clarity over verbosity
 """
+
     return generate_text(prompt)
 
 
@@ -133,7 +134,7 @@ Write a deep critical analysis:
 Rules:
 - Be specific, not generic
 - Think like a peer reviewer
-- Avoid repeating general AI statements
+- Avoid repeating general statements
 """
 
     return generate_text(prompt)
