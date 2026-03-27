@@ -27,8 +27,11 @@ def research_topic(topic: str):
                 continue
 
             summary = summarize_text(content)
-            credibility_score = get_credibility_score(url)
-
+            credibility_data = get_credibility_score(url)
+            if isinstance(credibility_data, dict):
+                credibility_score = credibility_data.get("score", 0)
+            else:
+                credibility_score = credibility_data
             enriched_data.append({
                 "title": item.get("title"),
                 "url": url,
