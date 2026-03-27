@@ -7,7 +7,7 @@ def format_query(query):
     if not keywords:
         return "health"
 
-    # 🔥 force PubMed-friendly query
+    
     return " OR ".join(keywords[:5]) + " AND (review OR study)"
 def search_pubmed(query: str, max_results: int = 3):
     
@@ -61,7 +61,7 @@ def search_pubmed(query: str, max_results: int = 3):
             continue  
 
         papers.append({
-            "id":len(papers)+1,
+            
             "title": paper.get("title"),
             "date": paper.get("pubdate"),
             "source": paper.get("source"),

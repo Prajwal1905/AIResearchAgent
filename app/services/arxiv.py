@@ -26,7 +26,7 @@ def search_arxiv(query: str, max_results: int = 3):
         published = entry.find("atom:published", namespace).text[:10]
 
         papers.append({
-            "id": i + 1,
+            
             "title": title,
             "url": link,
             "date": published,

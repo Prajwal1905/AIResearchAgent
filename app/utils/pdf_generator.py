@@ -13,18 +13,15 @@ def clean_html(text):
     return text
 
 
-# -------- REMOVE RAW URLS --------
 def remove_urls(text):
     return re.sub(r"https?://\S+", "", text)
 
 
-# -------- FORMAT MARKDOWN --------
 def format_markdown(text):
     text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
     return text
 
 
-# -------- CONVERT CITATIONS TO CLICKABLE [1] --------
 def convert_citations(text, references):
     def repl(match):
         num = int(match.group(1))
@@ -39,7 +36,6 @@ def convert_citations(text, references):
 
     return re.sub(r"\[(\d+)\]", repl, text)
 
-# -------- PROCESS TEXT --------
 def process_text(text, styles, references, link_style):
     elements = []
     lines = text.split("\n")
@@ -50,7 +46,7 @@ def process_text(text, styles, references, link_style):
     while i < len(lines):
         line = lines[i]
 
-        # -------- TABLE --------
+        
         if "|" in line:
             if buffer:
                 combined = " ".join(buffer)
@@ -109,7 +105,7 @@ def process_text(text, styles, references, link_style):
 
             continue
 
-        # -------- HEADINGS --------
+        
         elif line.startswith("### "):
             heading = clean_html(format_markdown(escape(line.replace("### ", ""))))
             elements.append(Paragraph(f"<b>{heading}</b>", styles["Heading3"]))
@@ -120,7 +116,7 @@ def process_text(text, styles, references, link_style):
             elements.append(Paragraph(f"<b>{heading}</b>", styles["Heading4"]))
             elements.append(Spacer(1, 6))
 
-        # -------- NORMAL TEXT --------
+        
         else:
             line = remove_urls(line)
             line = clean_html(line)
@@ -135,7 +131,7 @@ def process_text(text, styles, references, link_style):
 
         i += 1
 
-    # -------- FINAL BUFFER --------
+    
     if buffer:
         combined = " ".join(buffer)
         combined = remove_urls(combined)
@@ -147,7 +143,6 @@ def process_text(text, styles, references, link_style):
     return elements
 
 
-# -------- MAIN FUNCTION --------
 def generate_pdf(topic: str, report: dict, filename="research_paper.pdf"):
     doc = SimpleDocTemplate(
         filename,
@@ -163,8 +158,8 @@ def generate_pdf(topic: str, report: dict, filename="research_paper.pdf"):
     link_style = ParagraphStyle(
         'LinkStyle',
         parent=styles['BodyText'],
-        textColor=colors.black,   # normal text
-        linkColor=colors.blue,    # 🔥 makes links blue
+        textColor=colors.black,   
+        linkColor=colors.blue,    
         underlineWidth=1,
         underlineProportion=0.1,
     )
