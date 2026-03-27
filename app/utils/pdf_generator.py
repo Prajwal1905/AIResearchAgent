@@ -6,7 +6,7 @@ from xml.sax.saxutils import escape
 import re
 
 
-# -------- CLEAN HTML --------
+
 def clean_html(text):
     text = text.replace("<br>", "\n").replace("<br/>", "\n")
     text = text.replace("&nbsp;", " ")
@@ -33,7 +33,7 @@ def convert_citations(text, references):
 
         if ref:
             url = ref.get("url", "#")
-            return f'<link href="{url}">[{num}]</link>'
+            return f'<link href="{url}"><u>[{num}]</u></link>'
 
         return match.group(0)
 
@@ -81,7 +81,7 @@ def process_text(text, styles, references, link_style):
                     cell = convert_citations(cell, references)
                     cell = format_markdown(cell)
 
-                    wrapped_row.append(Paragraph(cell, link_style))
+                    wrapped_row.append(Paragraph(cell,  styles["BodyText"]))
                 wrapped_data.append(wrapped_row)
 
             if wrapped_data:
@@ -165,6 +165,7 @@ def generate_pdf(topic: str, report: dict, filename="research_paper.pdf"):
         parent=styles['BodyText'],
         textColor=colors.black,   # normal text
         linkColor=colors.blue,    # 🔥 makes links blue
+        underlineWidth=1,
         underlineProportion=0.1,
     )
 
