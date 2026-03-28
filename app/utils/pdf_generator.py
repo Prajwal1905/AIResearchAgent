@@ -6,7 +6,6 @@ from xml.sax.saxutils import escape
 import re
 
 
-
 def clean_html(text):
     text = text.replace("<br>", "\n").replace("<br/>", "\n")
     text = text.replace("&nbsp;", " ")
@@ -19,6 +18,14 @@ def remove_urls(text):
 
 def format_markdown(text):
     text = re.sub(r"\*\*(.*?)\*\*", r"<b>\1</b>", text)
+    return text
+
+
+
+def clean_ai_artifacts(text):
+    text = re.sub(r"Correction:.*", "", text)
+    text = re.sub(r"Clarification:.*", "", text)
+    text = re.sub(r"Reference data:.*", "", text)
     return text
 
 
@@ -36,6 +43,7 @@ def convert_citations(text, references):
 
     return re.sub(r"\[(\d+)\]", repl, text)
 
+
 def process_text(text, styles, references, link_style):
     elements = []
     lines = text.split("\n")
@@ -45,6 +53,9 @@ def process_text(text, styles, references, link_style):
 
     while i < len(lines):
         line = lines[i]
+
+        
+        line = clean_ai_artifacts(line)
 
         
         if "|" in line:
@@ -72,12 +83,13 @@ def process_text(text, styles, references, link_style):
             for row in table_data:
                 wrapped_row = []
                 for cell in row:
+                    cell = clean_ai_artifacts(cell)
                     cell = remove_urls(cell)
                     cell = clean_html(cell)
                     cell = convert_citations(cell, references)
                     cell = format_markdown(cell)
 
-                    wrapped_row.append(Paragraph(cell,  styles["BodyText"]))
+                    wrapped_row.append(Paragraph(cell, styles["BodyText"]))
                 wrapped_data.append(wrapped_row)
 
             if wrapped_data:
@@ -97,7 +109,6 @@ def process_text(text, styles, references, link_style):
                     ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
                     ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
                     ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("WORDWRAP", (0, 0), (-1, -1), "CJK"),
                 ]))
 
                 elements.append(table)
@@ -116,7 +127,7 @@ def process_text(text, styles, references, link_style):
             elements.append(Paragraph(f"<b>{heading}</b>", styles["Heading4"]))
             elements.append(Spacer(1, 6))
 
-        
+       
         else:
             line = remove_urls(line)
             line = clean_html(line)
@@ -131,7 +142,7 @@ def process_text(text, styles, references, link_style):
 
         i += 1
 
-    
+    # flush remaining buffer
     if buffer:
         combined = " ".join(buffer)
         combined = remove_urls(combined)
@@ -158,10 +169,7 @@ def generate_pdf(topic: str, report: dict, filename="research_paper.pdf"):
     link_style = ParagraphStyle(
         'LinkStyle',
         parent=styles['BodyText'],
-        textColor=colors.black,   
-        linkColor=colors.blue,    
-        underlineWidth=1,
-        underlineProportion=0.1,
+        linkColor=colors.blue,
     )
 
     content = []
@@ -190,6 +198,20 @@ def generate_pdf(topic: str, report: dict, filename="research_paper.pdf"):
         content.extend(processed_elements)
 
         content.append(Spacer(1, 12))
+
+   
+    if references:
+        content.append(Paragraph("<b>References</b>", styles["Heading2"]))
+        content.append(Spacer(1, 10))
+
+        for ref in references:
+            ref_text = f"[{ref['id']}] {ref.get('title')}"
+
+            if ref.get("url"):
+                ref_text += f' <link href="{ref["url"]}">{ref["url"]}</link>'
+
+            content.append(Paragraph(ref_text, styles["BodyText"]))
+            content.append(Spacer(1, 6))
 
     doc.build(content)
 
