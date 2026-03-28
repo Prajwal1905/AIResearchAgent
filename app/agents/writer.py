@@ -11,69 +11,68 @@ def write_section(
     domain = research_result.get("domain", "General")
     references = research_result.get("references", [])
 
+    
     ref_text = "\n".join([
         f"[{ref['id']}] {ref.get('title')}"
         for ref in references
         if ref.get("title")
     ])
 
-   
     valid_ids = [str(ref["id"]) for ref in references]
     valid_ids_str = ", ".join(valid_ids)
 
     
     if section.lower() == "abstract":
         instruction = """
-Write a concise summary of the entire research.
-Include:
-- Problem
+Write a concise synthesis of the research:
+- Core problem
 - Approach
 - Key findings
-- Importance
+- Why it matters
 (No headings, no bullets)
 """
     elif section.lower() == "introduction":
         instruction = """
-Explain background, importance, and scope of the topic.
-Set context clearly and define problem space.
+Explain the problem context, importance, and scope.
+Clearly define the gap being addressed.
 """
     elif "literature" in section.lower():
         instruction = """
-Review existing research and compare different approaches.
-Highlight trends, agreements, and disagreements.
+Compare existing approaches and findings.
+Highlight agreements, contradictions, and trends.
 """
     elif "method" in section.lower():
         instruction = """
-Explain how the problem can be approached.
-Discuss models, frameworks, or methodologies used.
+Explain how the problem is approached.
+Focus on reasoning behind chosen methods.
 """
     elif "finding" in section.lower() or "result" in section.lower():
         instruction = """
-Present key findings derived from research.
-Focus on evidence and outcomes.
+Present key findings.
+Focus on meaningful insights, not raw description.
 """
     elif "discussion" in section.lower():
         instruction = """
 Interpret findings and explain implications.
-Connect results with real-world meaning.
+Connect insights to real-world impact.
 """
     elif "conclusion" in section.lower():
         instruction = """
-Summarize key insights and overall takeaway.
-Do NOT repeat earlier text.
+Summarize key insights and final takeaways.
+Avoid repetition.
 """
     elif "future" in section.lower():
         instruction = """
-Suggest future research directions and improvements.
+Suggest realistic future research directions.
 """
     else:
         instruction = """
-Write analytical content using evidence, insights, and limitations.
+Provide analytical insights with reasoning and limitations.
 """
 
     
     prompt = f"""
-You are an expert academic research writer.
+You are an expert academic research analyst (NOT a summarizer).
 
 Topic: {topic}
 Section: {section}
@@ -95,19 +94,37 @@ STRICT VALIDATION:
 - Allowed citations: [{valid_ids_str}]
 - Any other citation is INVALID
 
-Instructions:
+INSTRUCTIONS:
 {instruction}
 
-RULES:
-- Use only given references
-- Cite naturally like [1], [2]
-- Do NOT invent citations
-- Be analytical and precise
-- Avoid repetition
+REASONING RULES (VERY IMPORTANT):
+- Do NOT copy or summarize sources directly
+- Combine insights from multiple references
+- Compare findings when possible
+- Highlight patterns, contradictions, or gaps
+- Explain WHY findings matter, not just WHAT they are
+- Avoid generic phrases like "AI is transforming..."
+- Avoid filler sentences
+
+QUALITY RULES:
+- Every paragraph must add new information
+- Do NOT repeat ideas from previous sections
+- Build on earlier content instead of restating
+- Keep output concise but deep
+
+CITATION RULES:
+- Use citations only when supporting a specific claim
+- Do NOT overuse citations
+- Prefer combining citations like [1][2] when relevant
+
+STYLE:
+- Write like a research analyst, not a chatbot
+- Use precise, information-dense sentences
+- Avoid vague or generic statements
 
 FORMAT:
-- Use tables where useful
-- Keep clarity over verbosity
+- Use tables only when they improve clarity
+- Prefer structured comparison over long paragraphs
 """
 
     return generate_text(prompt)
@@ -132,9 +149,9 @@ Write a deep critical analysis:
 3. Biases & Gaps (dataset, assumptions, missing perspectives)
 
 Rules:
-- Be specific, not generic
-- Think like a peer reviewer
-- Avoid repeating general statements
+- Be specific and analytical
+- Avoid generic AI statements
+- Focus on real weaknesses and trade-offs
 """
 
     return generate_text(prompt)
