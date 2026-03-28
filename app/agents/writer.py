@@ -106,16 +106,26 @@ REASONING RULES (VERY IMPORTANT):
 - Avoid generic phrases like "AI is transforming..."
 - Avoid filler sentences
 
+SYNTHESIS RULES (CRITICAL):
+- Combine insights from multiple references into a single statement
+- Identify overlapping findings across sources
+- Merge similar ideas instead of repeating them
+- Highlight agreement or contrast between sources
+- Prefer fewer but stronger sentences
+
 QUALITY RULES:
 - Every paragraph must add new information
 - Do NOT repeat ideas from previous sections
 - Build on earlier content instead of restating
 - Keep output concise but deep
 
-CITATION RULES:
+CITATION RULES (VERY IMPORTANT):
 - Use citations only when supporting a specific claim
+- Prefer combining multiple sources when they support the same idea
+- Combine citations like [1][2] for stronger evidence
+- If two sources say similar things → merge into one sentence
+- Do NOT write one sentence per reference
 - Do NOT overuse citations
-- Prefer combining citations like [1][2] when relevant
 
 STYLE:
 - Write like a research analyst, not a chatbot
@@ -125,6 +135,14 @@ STYLE:
 FORMAT:
 - Use tables only when they improve clarity
 - Prefer structured comparison over long paragraphs
+
+EXAMPLES:
+
+ Weak:
+AI improves diagnosis [1]. Another study shows improvement [2].
+
+ Strong:
+AI improves diagnostic accuracy by leveraging pattern recognition across datasets [1][2].
 """
 
     return generate_text(prompt)
