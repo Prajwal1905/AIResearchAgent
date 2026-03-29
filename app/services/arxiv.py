@@ -12,25 +12,35 @@ def search_arxiv(query: str, max_results: int = 3):
     }
 
     response = requests.get(url, params=params)
-    root = ET.fromstring(response.content)
+
+    if response.status_code != 200:
+        return []
+
+    try:
+        root = ET.fromstring(response.content)
+    except Exception:
+        print("arXiv XML parse error")
+        return []
+
+    namespace = {"atom": "http://www.w3.org/2005/Atom"}
+    entries = root.findall("atom:entry", namespace)
 
     papers = []
 
-    namespace = {"atom": "http://www.w3.org/2005/Atom"}
+    for entry in entries:
+        try:
+            title = entry.find("atom:title", namespace).text.strip()
+            link = entry.find("atom:id", namespace).text.strip()
+            published = entry.find("atom:published", namespace).text[:10]
 
-    entries = root.findall("atom:entry", namespace)
+            papers.append({
+                "title": title,
+                "url": link,
+                "date": published,
+                "source": "arxiv"
+            })
 
-    for i, entry in enumerate(entries):
-        title = entry.find("atom:title", namespace).text.strip()
-        link = entry.find("atom:id", namespace).text.strip()
-        published = entry.find("atom:published", namespace).text[:10]
-
-        papers.append({
-            
-            "title": title,
-            "url": link,
-            "date": published,
-            "source": "arxiv"
-        })
+        except Exception:
+            continue
 
     return papers

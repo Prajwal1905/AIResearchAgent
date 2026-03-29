@@ -1,14 +1,13 @@
 import requests
 
-def format_query(query):
-    # keep only important keywords
-    keywords = [w for w in query.split() if len(w) > 3]
 
+def format_query(query):
+    keywords = [w for w in query.split() if len(w) > 3]
     if not keywords:
         return "health"
-
-    
     return " OR ".join(keywords[:5]) + " AND (review OR study)"
+
+
 def search_pubmed(query: str, max_results: int = 3):
     
     url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
@@ -21,26 +20,22 @@ def search_pubmed(query: str, max_results: int = 3):
     }
 
     response = requests.get(url, params=params)
-    data = response.json()
+
+    if response.status_code != 200:
+        return []
+
+    try:
+        data = response.json()
+    except Exception:
+        print("PubMed JSON parse error")
+        return []
 
     ids = data.get("esearchresult", {}).get("idlist", [])
+
     if not ids:
-        print("Retrying with simplified query...")
+        return []
 
     
-        simple_query = "artificial intelligence healthcare"
-
-        params["term"] = simple_query
-        response = requests.get(url, params=params)
-        data = response.json()
-
-        ids = data.get("esearchresult", {}).get("idlist", [])
-
-        if not ids:
-           print("No PubMed results found")
-           return []
-    papers = []
-
     fetch_url = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 
     fetch_params = {
@@ -50,18 +45,26 @@ def search_pubmed(query: str, max_results: int = 3):
     }
 
     fetch_response = requests.get(fetch_url, params=fetch_params)
-    fetch_data = fetch_response.json()
+
+    if fetch_response.status_code != 200:
+        return []
+
+    try:
+        fetch_data = fetch_response.json()
+    except Exception:
+        print("PubMed fetch JSON error")
+        return []
 
     result = fetch_data.get("result", {})
 
+    papers = []
+
     for pid in ids:
         paper = result.get(pid)
-
         if not paper:
-            continue  
+            continue
 
         papers.append({
-            
             "title": paper.get("title"),
             "date": paper.get("pubdate"),
             "source": paper.get("source"),
