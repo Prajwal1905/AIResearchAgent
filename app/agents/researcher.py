@@ -13,8 +13,6 @@ def research_topic(topic: str):
     raw_data = routed_result.get("data", [])
     domain = routed_result.get("domain", "general")
     source = routed_result.get("source", "mixed")
-
-
     
     def process_item(item):
         url = item.get("url") or "https://www.google.com"
@@ -25,9 +23,17 @@ def research_topic(topic: str):
             if not content or len(content) < 200:
                 return None
 
-            summary = summarize_text(content)
+            try:
+                summary = summarize_text(content)
+                if not summary or not isinstance(summary, str):
+                   summary = "Summary not available"
+            except Exception:
+                summary = "Summary failed"
 
-            credibility_data = get_credibility_score(url)
+            try:
+                credibility_data = get_credibility_score(url)
+            except Exception:
+                credibility_data = 0
 
             
             if isinstance(credibility_data, dict):
