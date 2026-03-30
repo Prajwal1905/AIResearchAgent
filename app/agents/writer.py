@@ -129,6 +129,8 @@ CITATION RULES (VERY IMPORTANT):
 - Do NOT write one sentence per reference
 - Do NOT overuse citations
 
+
+
 MANDATORY CITATION RULE:
 - Every paragraph MUST include at least one citation if references exist
 - Prefer combining citations like [1][2]
@@ -165,6 +167,12 @@ STRICT OUTPUT RULE:
   "Clarification"
   "Unsupported Claims"
 - Write ONLY clean research content
+
+OUTPUT STYLE:
+- Write like a finalized research paper
+- NOT like a reviewer or critic
+- DO NOT analyze correctness of claims
+- DO NOT suggest improvements
 
 EXAMPLES:
 
