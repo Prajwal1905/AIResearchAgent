@@ -81,16 +81,46 @@ function App() {
 
     setLoading(false);
   };
-  const replaceCitations = (text, references) => {
-    return text.replace(/\[(\d+)\]/g, (match, num) => {
-      const ref = references?.find((r) => r.id === parseInt(num));
-      if (ref) {
-        return `[${num}](${ref.url})`;
+  const renderWithCitations = (text, references) => {
+    // convert everything safely to string
+    let str = "";
+
+    if (typeof text === "string") {
+      str = text;
+    } else if (Array.isArray(text)) {
+      str = text.map((item) => (typeof item === "string" ? item : "")).join("");
+    } else {
+      return text; // if it's JSX, just return as-is
+    }
+
+    const parts = str.split(/(\[\d+\])/g);
+
+    return parts.map((part, i) => {
+      const match = part.match(/\[(\d+)\]/);
+
+      if (match) {
+        const refId = parseInt(match[1]);
+        const ref = references?.find((r) => r.id === refId);
+
+        if (ref) {
+          return (
+            <a
+              key={i}
+              href={ref.url}
+              target="_blank"
+              rel="noreferrer"
+              title={ref.title}
+              className="text-blue-400 underline mx-0.5 cursor-pointer"
+            >
+              [{refId}]
+            </a>
+          );
+        }
       }
-      return match;
+
+      return part;
     });
   };
-
   const handleNewChat = () => {
     setChat([]);
     setLastReport(null);
@@ -226,30 +256,35 @@ function App() {
               </div>
 
               {msg.text && (
-                <div className="prose prose-invert">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      a({ href, children }) {
-                        return (
-                          <a
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-400 underline"
-                          >
-                            {children}
-                          </a>
-                        );
-                      },
-                    }}
-                  >
-                    {replaceCitations(
-                      msg.text,
-                      msg.data?.references || lastReport?.references,
-                    )}
-                  </ReactMarkdown>
-                </div>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p({ children }) {
+                      return (
+                        <p>
+                          {renderWithCitations(
+                            children,
+                            msg.data?.references || lastReport?.references,
+                          )}
+                        </p>
+                      );
+                    },
+                    a({ href, children }) {
+                      return (
+                        <a
+                          href={href}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-400 underline"
+                        >
+                          {children}
+                        </a>
+                      );
+                    },
+                  }}
+                >
+                  {msg.text}
+                </ReactMarkdown>
               )}
 
               {msg.data?.sections &&
@@ -258,77 +293,23 @@ function App() {
                     <h2 className="text-lg font-semibold text-white mb-2">
                       {key}
                     </h2>
-                    <div className="prose prose-invert text-gray-400">
-                      <ReactMarkdown
-                        remarkPlugins={[remarkGfm]}
-                        components={{
-                          a({ href, children }) {
-                            return (
-                              <a
-                                href={href}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-blue-400 underline"
-                              >
-                                {children}
-                              </a>
-                            );
-                          },
-
-                          td({ children }) {
-                            const text = Array.isArray(children)
-                              ? children
-                                  .map((child) =>
-                                    typeof child === "string" ? child : "",
-                                  )
-                                  .join("")
-                              : typeof children === "string"
-                                ? children
-                                : "";
-
-                            const parts = text.split(/(\[\d+\])/g);
-
-                            return (
-                              <td>
-                                {parts.map((part, i) => {
-                                  const match = part.match(/\[(\d+)\]/);
-
-                                  if (match) {
-                                    const refId = parseInt(match[1]);
-
-                                    const references =
-                                      msg.data?.references ||
-                                      lastReport?.references;
-
-                                    const ref = references?.find(
-                                      (r) => r.id === refId,
-                                    );
-
-                                    if (ref) {
-                                      return (
-                                        <a
-                                          key={i}
-                                          href={ref.url}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="text-blue-400 underline"
-                                        >
-                                          [{refId}]
-                                        </a>
-                                      );
-                                    }
-                                  }
-
-                                  return part;
-                                })}
-                              </td>
-                            );
-                          },
-                        }}
-                      >
-                       {value || "no content"}
-                      </ReactMarkdown>
-                    </div>
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p({ children }) {
+                          return (
+                            <p>
+                              {renderWithCitations(
+                                children,
+                                msg.data?.references || lastReport?.references,
+                              )}
+                            </p>
+                          );
+                        },
+                      }}
+                    >
+                      {value || "no content"}
+                    </ReactMarkdown>
                   </div>
                 ))}
 
@@ -341,74 +322,19 @@ function App() {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        a({ href, children }) {
+                        p({ children }) {
                           return (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-400 underline"
-                            >
-                              {children}
-                            </a>
-                          );
-                        },
-
-                        td({ children }) {
-                          const text = Array.isArray(children)
-                            ? children
-                                .map((child) =>
-                                  typeof child === "string" ? child : "",
-                                )
-                                .join("")
-                            : typeof children === "string"
-                              ? children
-                              : "";
-
-                          const parts = text.split(/(\[\d+\])/g);
-
-                          return (
-                            <td>
-                              {parts.map((part, i) => {
-                                const match = part.match(/\[(\d+)\]/);
-
-                                if (match) {
-                                  const refId = parseInt(match[1]);
-
-                                  const references =
-                                    msg.data?.references ||
-                                    lastReport?.references;
-
-                                  const ref = references?.find(
-                                    (r) => r.id === refId,
-                                  );
-
-                                  if (ref) {
-                                    return (
-                                      <a
-                                        key={i}
-                                        href={ref.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-blue-400 underline"
-                                      >
-                                        [{refId}]
-                                      </a>
-                                    );
-                                  }
-                                }
-
-                                return part;
-                              })}
-                            </td>
+                            <p>
+                              {renderWithCitations(
+                                children,
+                                msg.data?.references || lastReport?.references,
+                              )}
+                            </p>
                           );
                         },
                       }}
                     >
-                      {replaceCitations(
-                        msg.data.perspectives,
-                        msg.data?.references || lastReport?.references
-                      )}
+                      {msg.data.perspectives}
                     </ReactMarkdown>
                   </div>
                 </div>
@@ -423,74 +349,19 @@ function App() {
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        a({ href, children }) {
+                        p({ children }) {
                           return (
-                            <a
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-400 underline"
-                            >
-                              {children}
-                            </a>
-                          );
-                        },
-
-                        td({ children }) {
-                          const text = Array.isArray(children)
-                            ? children
-                                .map((child) =>
-                                  typeof child === "string" ? child : "",
-                                )
-                                .join("")
-                            : typeof children === "string"
-                              ? children
-                              : "";
-
-                          const parts = text.split(/(\[\d+\])/g);
-
-                          return (
-                            <td>
-                              {parts.map((part, i) => {
-                                const match = part.match(/\[(\d+)\]/);
-
-                                if (match) {
-                                  const refId = parseInt(match[1]);
-
-                                  const references =
-                                    msg.data?.references ||
-                                    lastReport?.references;
-
-                                  const ref = references?.find(
-                                    (r) => r.id === refId,
-                                  );
-
-                                  if (ref) {
-                                    return (
-                                      <a
-                                        key={i}
-                                        href={ref.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="text-blue-400 underline"
-                                      >
-                                        [{refId}]
-                                      </a>
-                                    );
-                                  }
-                                }
-
-                                return part;
-                              })}
-                            </td>
+                            <p>
+                              {renderWithCitations(
+                                children,
+                                msg.data?.references || lastReport?.references,
+                              )}
+                            </p>
                           );
                         },
                       }}
                     >
-                      {replaceCitations(
-                        msg.data.critical_analysis,
-                        msg.data?.references || lastReport?.references
-                      )}
+                      {msg.data.critical_analysis}
                     </ReactMarkdown>
                   </div>
                 </div>
