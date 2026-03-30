@@ -13,9 +13,9 @@ def write_section(
 
     
     ref_text = "\n".join([
-        f"[{ref['id']}] {ref.get('title')}"
+        f"[{ref['id']}]({ref.get('url')}) {ref.get('title')}"
         for ref in references
-        if ref.get("title")
+        if ref.get("title") and ref.get("url")
     ])
 
     valid_ids = [str(ref["id"]) for ref in references]
@@ -88,7 +88,9 @@ IMPORTANT:
 - You MUST ONLY use these reference IDs: {valid_ids_str}
 - DO NOT generate any other citations
 - DO NOT use [5], [10], etc if not listed
-- If unsure, DO NOT add citation
+- You SHOULD use citations whenever possible
+- If references are provided, use them actively
+- At least 1–2 citations must appear in each paragraph if relevant
 
 STRICT VALIDATION:
 - Allowed citations: [{valid_ids_str}]
@@ -127,6 +129,11 @@ CITATION RULES (VERY IMPORTANT):
 - Do NOT write one sentence per reference
 - Do NOT overuse citations
 
+MANDATORY CITATION RULE:
+- Every paragraph MUST include at least one citation if references exist
+- Prefer combining citations like [1][2]
+- Do NOT skip citations when references are available
+
 HUMAN EXPERT STYLE (CRITICAL):
 - Write like an experienced researcher explaining insights
 - Use natural sentence flow, not rigid AI structure
@@ -149,6 +156,15 @@ AVOID:
 FORMAT:
 - Use tables only when they improve clarity
 - Prefer structured comparison over long paragraphs
+
+STRICT OUTPUT RULE:
+-Use tables STRICT OUTPUT RULE:
+- DO NOT include sections like:
+  "Correction"
+  "Verification Notes"
+  "Clarification"
+  "Unsupported Claims"
+- Write ONLY clean research content
 
 EXAMPLES:
 
