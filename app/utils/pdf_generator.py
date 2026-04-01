@@ -60,7 +60,8 @@ def process_text(text, styles, references, link_style):
         
         if "|" in line:
             if buffer:
-                combined = " ".join(buffer)
+                combined = " ".join(buffer[:5])
+                buffer = buffer[5:]
                 combined = remove_urls(combined)
                 combined = clean_html(combined)
                 combined = convert_citations(combined, references)
@@ -126,7 +127,30 @@ def process_text(text, styles, references, link_style):
             heading = clean_html(format_markdown(escape(line.replace("#### ", ""))))
             elements.append(Paragraph(f"<b>{heading}</b>", styles["Heading4"]))
             elements.append(Spacer(1, 6))
+        
+        elif any(
+            line.strip().startswith(section)
+            for section in [
+                "Abstract",
+                "Introduction",
+                "Literature Review",
+                "Methodology",
+                "Findings",
+                "Discussion",
+                "Conclusion",
+                "Future Work"
+            ]
+        ):
+            if buffer:
+                combined = " ".join(buffer)
+               
+                elements.append(Paragraph(combined, link_style))
+                elements.append(Spacer(1, 12))
+                buffer = []
+                
 
+            elements.append(Paragraph(f"<b>{line.strip()}</b>", styles["Heading2"]))
+            elements.append(Spacer(1, 10))
        
         else:
             line = remove_urls(line)
@@ -165,6 +189,9 @@ def generate_pdf(topic: str, report: dict, filename="research_paper.pdf"):
     )
 
     styles = getSampleStyleSheet()
+
+    styles["BodyText"].spaceAfter =10
+    styles["BodyText"].alignment =4
 
     link_style = ParagraphStyle(
         'LinkStyle',

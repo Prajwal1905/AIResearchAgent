@@ -253,31 +253,41 @@ IMPORTANT:
 - Combine insights (DO NOT repeat per source)
 - Write like a real researcher
 
-OUTPUT FORMAT (STRICT):
+OUTPUT FORMAT (STRICT - MUST FOLLOW EXACTLY):
+
+Each section MUST follow this exact structure:
 
 ### Abstract
-...
+Write a clear paragraph.
 
 ### Introduction
-...
+Write a clear paragraph.
 
 ### Literature Review
-...
+Write a clear paragraph.
 
 ### Methodology
-...
+Write a clear paragraph.
 
 ### Findings
-...
+Write a clear paragraph.
 
 ### Discussion
-...
+Write a clear paragraph.
 
 ### Conclusion
-...
+Write a clear paragraph.
 
 ### Future Work
-...
+Write a clear paragraph.
+
+CRITICAL RULES:
+- DO NOT merge all sections into one paragraph
+- EACH section must have its own paragraph
+- Leave ONE blank line between sections
+- ALWAYS start sections with ### exactly
+- DO NOT skip headings
+- DO NOT reorder sections
 """
 
     return generate_text(prompt)

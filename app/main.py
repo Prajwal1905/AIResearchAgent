@@ -29,6 +29,30 @@ class FollowUpRequest(BaseModel):
     report: dict
 
 
+def split_sections(text):
+    sections = {}
+    current = None
+
+    for line in text.split("\n"):
+        line = line.strip()
+
+        if line in [
+            "Abstract",
+            "Introduction",
+            "Literature Review",
+            "Methodology",
+            "Findings",
+            "Discussion",
+            "Conclusion",
+            "Future Work"
+        ]:
+            current = line
+            sections[current] = ""
+        elif current:
+            sections[current] += line + " "
+
+    return sections
+
 def format_references(data):
     refs = []
     for i, item in enumerate(data, start=1):
@@ -69,7 +93,8 @@ async def generate_report(data: TopicRequest):
                 "data": []
             }
 
-        full_report = write_full_report(data.topic, research_result)
+        raw_report = write_full_report(data.topic, research_result)
+        split_report = split_sections(raw_report)
 
         analysis = generate_critical_analysis(data.topic, research_result)
         perspectives = generate_perspectives(data.topic, research_result)
@@ -80,9 +105,7 @@ async def generate_report(data: TopicRequest):
             "topic": data.topic,
             "domain": research_result.get("domain"),
             "source": research_result.get("source"),
-            "sections":{
-                "Full Report":full_report,
-            },
+            "sections": split_report,
             "perspectives": perspectives,
             "critical_analysis": analysis,
             "references": refs,
