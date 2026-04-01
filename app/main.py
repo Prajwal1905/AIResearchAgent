@@ -1,19 +1,17 @@
 from fastapi import FastAPI
 from app.schemas.request import TopicRequest
-from app.prompts.research_prompt import get_research_prompt
-from app.services.llm import generate_text
-from app.agents.planner import create_plan
-from app.agents.writer import write_section,generate_critical_analysis
+from app.agents.writer import generate_critical_analysis
 from app.agents.researcher import research_topic
 from app.utils.pdf_generator import generate_pdf
 from fastapi.responses import FileResponse
 from app.agents.followup import answer_followup
 from app.agents.perspective import generate_perspectives
 from app.agents.comparator import compare_topics
-from app.agents.fact_checker import fact_check_section
+
 from fastapi.middleware.cors import CORSMiddleware 
 from app.utils.docx_generator import generate_docx
 from pydantic import BaseModel
+from app.agents.writer import write_full_report
 import os
 
 app = FastAPI()
@@ -60,7 +58,7 @@ async def generate_report(data: TopicRequest):
                 "result": comparison
             }
 
-        sections = create_plan(data.topic,data.custom_format)
+        
         try:
             research_result = research_topic(data.topic)
         except Exception as e:
@@ -71,52 +69,23 @@ async def generate_report(data: TopicRequest):
                 "data": []
             }
 
-        report = {}
-        previous_content = ""
-
-        if not isinstance(sections, list):
-            sections = ["Introduction", "Methodology", "Findings", "Conclusion"]
-
-        for section in sections:
-            content = write_section(
-                data.topic,
-                section,
-                research_result,
-                previous_content
-            )
-
-            checked_content = fact_check_section(
-                data.topic,
-                section,
-                content,
-                research_result.get("data", [])
-            )
-
-            report[section] = checked_content
-
-            
-            previous_content += f"\n{section}:\n{checked_content}\n"
+        full_report = write_full_report(data.topic, research_result)
 
         analysis = generate_critical_analysis(data.topic, research_result)
         perspectives = generate_perspectives(data.topic, research_result)
         
-        
-        references_list = format_references(research_result.get("data", []))
-
-        report["References"] = "\n".join([
-           f"[{ref['id']}] {ref['title']} ({ref['url']})"
-           for ref in references_list
-        ])
-        print(format_references(research_result.get("data", [])))
+        refs=format_references(research_result.get("data",[]))
         return {
             "type": "research",
             "topic": data.topic,
             "domain": research_result.get("domain"),
             "source": research_result.get("source"),
-            "sections": report,
+            "sections":{
+                "Full Report":full_report,
+            },
             "perspectives": perspectives,
             "critical_analysis": analysis,
-            "references": format_references(research_result.get("data", [])),
+            "references": refs,
         }
 
     except Exception as e:

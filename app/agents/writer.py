@@ -211,3 +211,73 @@ Rules:
 """
 
     return generate_text(prompt)
+
+
+def write_full_report(topic: str, research_result: dict):
+    domain = research_result.get("domain", "General")
+    references = research_result.get("references", [])
+
+    ref_text = "\n".join([
+        f"[{ref['id']}]({ref.get('url')}) {ref.get('title')}"
+        for ref in references
+        if ref.get("title") and ref.get("url")
+    ])
+
+    valid_ids = [str(ref["id"]) for ref in references]
+    valid_ids_str = ", ".join(valid_ids)
+
+    prompt = f"""
+You are an expert academic research analyst.
+
+Generate a FULL research report with these sections:
+
+1. Abstract
+2. Introduction
+3. Literature Review
+4. Methodology
+5. Findings
+6. Discussion
+7. Conclusion
+8. Future Work
+
+Topic: {topic}
+Domain: {domain}
+
+References:
+{ref_text}
+
+IMPORTANT:
+- Use ONLY these citation IDs: {valid_ids_str}
+- Use citations like [1][2]
+- Every section must include citations
+- Combine insights (DO NOT repeat per source)
+- Write like a real researcher
+
+OUTPUT FORMAT (STRICT):
+
+### Abstract
+...
+
+### Introduction
+...
+
+### Literature Review
+...
+
+### Methodology
+...
+
+### Findings
+...
+
+### Discussion
+...
+
+### Conclusion
+...
+
+### Future Work
+...
+"""
+
+    return generate_text(prompt)
