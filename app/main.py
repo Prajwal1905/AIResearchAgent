@@ -36,7 +36,13 @@ def split_sections(text):
     for line in text.split("\n"):
         line = line.strip()
 
-        if line in [
+        
+        if line.startswith("### "):
+            current = line.replace("### ", "").strip()
+            sections[current] = ""
+        
+        
+        elif line in [
             "Abstract",
             "Introduction",
             "Literature Review",
@@ -48,6 +54,7 @@ def split_sections(text):
         ]:
             current = line
             sections[current] = ""
+
         elif current:
             sections[current] += line + " "
 
