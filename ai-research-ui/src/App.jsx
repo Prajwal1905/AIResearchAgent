@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+
 function App() {
   const [input, setInput] = useState("");
   const [chat, setChat] = useState([]);
@@ -15,17 +17,19 @@ function App() {
   }, [chat]);
 
   const handleSend = async () => {
-    if (!input) return;
+    if (!input.trim()) return;
+
     const userInput = input;
     setInput("");
-    setChat((prev) => [...prev, { role: "user", text: input }]);
+    setChat((prev) => [...prev, { role: "user", text: userInput }]);
     setLoading(true);
 
     try {
       let res, data;
 
+      // if a report already exists, treat next message as follow-up question
       if (lastReport) {
-        res = await fetch("http://127.0.0.1:8000/ask-followup", {
+        res = await fetch(`${API}/ask-followup`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -40,30 +44,32 @@ function App() {
           ...prev,
           { role: "ai", text: data.answer || "No answer returned." },
         ]);
+
       } else {
-        res = await fetch("http://127.0.0.1:8000/generate-report", {
+        // generate a new research report
+        res = await fetch(`${API}/generate-report`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ topic: userInput }),
+          body: JSON.stringify({
+            topic: userInput,
+            custom_format: customFormat || null,  // send custom format to backend
+          }),
         });
 
         data = await res.json();
 
-        if (data.error) {
-          setChat((prev) => [
-            ...prev,
-            { role: "ai", text: " Error: " + data.error },
-          ]);
+        // handle comparison type response
+        if (data.type === "comparison") {
+          setLastReport(data);
+          setChat((prev) => [...prev, { role: "ai", data: data }]);
           return;
         }
 
+        // handle empty sections
         if (!data.sections || Object.keys(data.sections).length === 0) {
           setChat((prev) => [
             ...prev,
-            {
-              role: "ai",
-              text: " No content generated. Try another topic.",
-            },
+            { role: "ai", text: "No content generated. Try another topic." },
           ]);
           return;
         }
@@ -71,18 +77,20 @@ function App() {
         setLastReport(data);
         setChat((prev) => [...prev, { role: "ai", data: data }]);
       }
+
     } catch (err) {
       console.error(err);
       setChat((prev) => [
         ...prev,
-        { role: "ai", text: " Backend connection failed." },
+        { role: "ai", text: "Backend connection failed. Is the server running?" },
       ]);
+    } finally {
+      setLoading(false);  // always stop loading even if error happens
     }
-
-    setLoading(false);
   };
+
+  // converts [1] [2] in text into clickable links using references
   const renderWithCitations = (text, references) => {
-    // convert everything safely to string
     let str = "";
 
     if (typeof text === "string") {
@@ -90,7 +98,7 @@ function App() {
     } else if (Array.isArray(text)) {
       str = text.map((item) => (typeof item === "string" ? item : "")).join("");
     } else {
-      return text; // if it's JSX, just return as-is
+      return text;
     }
 
     const parts = str.split(/(\[\d+\])/g);
@@ -121,6 +129,7 @@ function App() {
       return part;
     });
   };
+
   const handleNewChat = () => {
     setChat([]);
     setLastReport(null);
@@ -131,30 +140,28 @@ function App() {
     if (!lastReport) return;
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/download-pdf", {
+      const res = await fetch(`${API}/download-pdf`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(lastReport),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: lastReport.topic,
+          sections: lastReport.sections,
+        }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        alert("PDF Error: " + err.error);
+        alert("PDF download failed");
         return;
       }
 
       const blob = await res.blob();
-
       const url = window.URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = "research_report.pdf";
       a.click();
-
       window.URL.revokeObjectURL(url);
+
     } catch (e) {
       console.error(e);
       alert("Failed to download PDF");
@@ -165,30 +172,28 @@ function App() {
     if (!lastReport) return;
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/download-docx", {
+      const res = await fetch(`${API}/download-docx`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(lastReport),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          topic: lastReport.topic,
+          sections: lastReport.sections,
+        }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        alert("DOCX Error: " + err.error);
+        alert("DOCX download failed");
         return;
       }
 
       const blob = await res.blob();
-
       const url = window.URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = "research_report.docx";
       a.click();
-
       window.URL.revokeObjectURL(url);
+
     } catch (e) {
       console.error(e);
       alert("Failed to download DOCX");
@@ -197,7 +202,8 @@ function App() {
 
   return (
     <div className="bg-[#0b0f19] text-gray-200 min-h-screen flex flex-col">
-      {/* HEADER */}
+
+     
       <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center text-sm text-gray-400">
         <div className="flex gap-4 items-center">
           <span>AI Research Assistant</span>
@@ -210,7 +216,6 @@ function App() {
               >
                 Download PDF
               </button>
-
               <button
                 onClick={handleDownloadDOCX}
                 className="text-xs bg-blue-700 px-2 py-1 rounded hover:bg-blue-600"
@@ -226,7 +231,9 @@ function App() {
         </button>
       </div>
 
+      
       <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-8 space-y-8">
+
         {chat.length === 0 && (
           <div className="text-center mt-32 text-gray-500 text-xl">
             Ask anything...
@@ -242,11 +249,13 @@ function App() {
             </div>
           ) : (
             <div key={i} className="space-y-6 leading-relaxed">
+
+              
               <div className="text-right">
                 <button
                   onClick={() =>
                     navigator.clipboard.writeText(
-                      msg.text || JSON.stringify(msg.data),
+                      msg.text || JSON.stringify(msg.data)
                     )
                   }
                   className="text-xs text-gray-500 hover:text-white"
@@ -255,6 +264,7 @@ function App() {
                 </button>
               </div>
 
+              
               {msg.text && (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
@@ -264,19 +274,14 @@ function App() {
                         <p>
                           {renderWithCitations(
                             children,
-                            msg.data?.references || lastReport?.references,
+                            lastReport?.references
                           )}
                         </p>
                       );
                     },
                     a({ href, children }) {
                       return (
-                        <a
-                          href={href}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-400 underline"
-                        >
+                        <a href={href} target="_blank" rel="noreferrer" className="text-blue-400 underline">
                           {children}
                         </a>
                       );
@@ -287,91 +292,70 @@ function App() {
                 </ReactMarkdown>
               )}
 
+              
+              {msg.data?.type === "comparison" && msg.data?.result && (
+                <div>
+                  <h2 className="text-lg font-semibold text-white mb-2">
+                    Comparison: {msg.data.topic}
+                  </h2>
+                  <div className="prose prose-invert text-gray-400">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.data.result}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
+             
               {msg.data?.sections &&
                 Object.entries(msg.data.sections).map(([key, value]) => (
                   <div key={key}>
-                    <h2 className="text-lg font-semibold text-white mb-2">
-                      {key}
-                    </h2>
+                    <h2 className="text-lg font-semibold text-white mb-2">{key}</h2>
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         p({ children }) {
                           return (
                             <p>
-                              {renderWithCitations(
-                                children,
-                                msg.data?.references || lastReport?.references,
-                              )}
+                              {renderWithCitations(children, msg.data?.references)}
                             </p>
                           );
                         },
                       }}
                     >
-                      {value || "no content"}
+                      {value || "No content"}
                     </ReactMarkdown>
                   </div>
                 ))}
 
+              
               {msg.data?.perspectives && (
                 <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    Perspectives
-                  </h2>
+                  <h2 className="text-lg font-semibold text-white mb-2">Perspectives</h2>
                   <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p({ children }) {
-                          return (
-                            <p>
-                              {renderWithCitations(
-                                children,
-                                msg.data?.references || lastReport?.references,
-                              )}
-                            </p>
-                          );
-                        },
-                      }}
-                    >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.data.perspectives}
                     </ReactMarkdown>
                   </div>
                 </div>
               )}
 
+              
               {msg.data?.critical_analysis && (
                 <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    Critical Analysis
-                  </h2>
+                  <h2 className="text-lg font-semibold text-white mb-2">Critical Analysis</h2>
                   <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p({ children }) {
-                          return (
-                            <p>
-                              {renderWithCitations(
-                                children,
-                                msg.data?.references || lastReport?.references,
-                              )}
-                            </p>
-                          );
-                        },
-                      }}
-                    >
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.data.critical_analysis}
                     </ReactMarkdown>
                   </div>
                 </div>
               )}
 
+              
               {msg.data?.references?.length > 0 && (
                 <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    References
-                  </h2>
+                  <h2 className="text-lg font-semibold text-white mb-2">References</h2>
                   <div className="space-y-1 text-sm text-gray-500">
                     {msg.data.references.map((ref) => (
                       <div key={ref.id}>
@@ -390,8 +374,9 @@ function App() {
                   </div>
                 </div>
               )}
+
             </div>
-          ),
+          )
         )}
 
         {loading && (
@@ -403,21 +388,27 @@ function App() {
         <div ref={endRef} />
       </div>
 
+     
       <div className="border-t border-gray-800 p-4 bg-[#0b0f19]">
         <div className="max-w-2xl mx-auto flex flex-col gap-2">
-          <textarea
-            value={customFormat}
-            onChange={(e) => setCustomFormat(e.target.value)}
-            placeholder="Paste research format (college format)"
-            className="w-full bg-gray-800 px-4 py-2 rounded-xl text-white placeholder-gray-500 outline-none"
-          />
+
+          
+          {!lastReport && (
+            <textarea
+              value={customFormat}
+              onChange={(e) => setCustomFormat(e.target.value)}
+              placeholder="Optional: paste your college/custom research format here"
+              className="w-full bg-gray-800 px-4 py-2 rounded-xl text-white placeholder-gray-500 outline-none text-sm"
+              rows={2}
+            />
+          )}
 
           <div className="flex gap-2">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Ask anything..."
+              onKeyDown={(e) => e.key === "Enter" && !loading && handleSend()}
+              placeholder={lastReport ? "Ask a follow-up question..." : "Enter a research topic..."}
               className="flex-1 bg-gray-800 px-4 py-3 rounded-xl outline-none text-white placeholder-gray-500"
             />
             <button
@@ -434,6 +425,7 @@ function App() {
           </div>
         </div>
       </div>
+
     </div>
   );
 }
