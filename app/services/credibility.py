@@ -1,45 +1,52 @@
-def get_credibility_score(link: str):
-    link = link.lower()
+from urllib.parse import unquote
 
-    score = 50   # base score
+
+def get_credibility_score(link: str):
+
+    if not link:
+        return {"score": 0, "label": "Low", "category": "Unknown"}
+
+    # decode encoded URLs like DDG redirects
+    link = unquote(link).lower()
+
+    score = 50
     category = "General Web"
 
-    #  HIGH TRUST SOURCES
-    if any(x in link for x in [".gov", ".edu"]):
+    # government and university sites
+    if any(x in link for x in [".gov", ".edu", ".ac.uk"]):
         score += 40
         category = "Government / Academic"
 
-    if any(x in link for x in ["nih", "who", "pubmed", "arxiv", "ieee", "springer"]):
+    # research and science databases
+    if any(x in link for x in ["pubmed", "arxiv", "nih", "who", "ieee", "springer", "nature.com", "sciencedirect", "jstor", "ncbi"]):
         score += 35
         category = "Scientific / Research"
 
-    # NEWS SOURCES
-    if any(x in link for x in ["bbc", "reuters", "nytimes", "forbes", "bloomberg"]):
+    # trusted news sources
+    if any(x in link for x in ["bbc", "reuters", "nytimes", "bloomberg", "forbes", "theguardian", "apnews"]):
         score += 20
         category = "Reputed News"
 
-    #  MEDIUM SOURCES
-    if any(x in link for x in ["medium.com", "towardsdatascience", "analyticsvidhya"]):
+    # tech blogs and publications
+    if any(x in link for x in ["towardsdatascience", "analyticsvidhya", "wired", "techcrunch"]):
         score += 10
         category = "Tech Blog"
 
-    #  LOW TRUST / PENALTY
-    if any(x in link for x in ["blogspot", "wordpress", "randomsite"]):
-        score -= 20
+    # low trust sources
+    if any(x in link for x in ["blogspot", "wordpress.com", "tumblr"]):
+        score -= 15
         category = "Unverified Blog"
 
-    #  VERY LOW / SPAM
-    if any(x in link for x in ["clickbait", "ads", "sponsored"]):
+    
+    if any(x in link for x in ["clickbait", "sponsored", "ads."]):
         score -= 30
         category = "Low Credibility"
 
-    #  Clamp score
     score = max(0, min(score, 100))
 
-    #  Label
     if score >= 80:
         label = "High"
-    elif score >= 60:
+    elif score >= 55:
         label = "Medium"
     else:
         label = "Low"
