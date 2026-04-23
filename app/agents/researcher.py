@@ -1,4 +1,3 @@
-from app.services.search import search_web
 from app.services.scraper import scrape_url
 from app.agents.summarizer import summarize_text
 from app.services.research_router import route_research
@@ -6,72 +5,64 @@ from app.services.credibility import get_credibility_score
 from concurrent.futures import ThreadPoolExecutor
 
 
+def process_item(item):
+    url = item.get("url")
+
+    # skip if no url
+    if not url:
+        return None
+
+    try:
+        content = scrape_url(url)
+
+        # skip if content is too short to be useful
+        if not content or len(content) < 200:
+            return None
+
+        summary = summarize_text(content)
+
+        if not summary or not isinstance(summary, str):
+            summary = "Summary not available"
+
+        credibility_data = get_credibility_score(url)
+        credibility_score = credibility_data.get("score", 0)
+
+        return {
+            "title": item.get("title"),
+            "url": url,
+            "summary": summary,
+            "credibility": credibility_score,
+            "source": item.get("source"),
+            "date": item.get("date")
+        }
+
+    except Exception as e:
+        print("Error processing item:", e)
+        return None
+
+
 def research_topic(topic: str):
-    
+
     routed_result = route_research(topic)
 
     raw_data = routed_result.get("data", [])
     domain = routed_result.get("domain", "general")
-    source = routed_result.get("source", "mixed")
-    
-    def process_item(item):
-        url = item.get("url") or "https://www.google.com"
+    source = routed_result.get("source", "web")
 
-        try:
-            content = scrape_url(url)
-
-            if not content or len(content) < 200:
-                return None
-
-            try:
-                summary = summarize_text(content)
-                if not summary or not isinstance(summary, str):
-                   summary = "Summary not available"
-            except Exception:
-                summary = "Summary failed"
-
-            try:
-                credibility_data = get_credibility_score(url)
-            except Exception:
-                credibility_data = 0
-
-            
-            if isinstance(credibility_data, dict):
-                credibility_score = credibility_data.get("score", 0)
-            else:
-                credibility_score = credibility_data
-
-            return {
-                "title": item.get("title"),
-                "url": url,
-                "summary": summary,
-                "credibility": credibility_score,
-                "source": item.get("source"),
-                "date": item.get("date")
-            }
-
-        except Exception:
-            return None
-
-
+    # scrape and summarize all results in parallel
     with ThreadPoolExecutor(max_workers=5) as executor:
         results = list(executor.map(process_item, raw_data))
 
     # remove failed ones
     enriched_data = [r for r in results if r]
 
+    # sort by credibility score — highest first
+    enriched_data = sorted(enriched_data, key=lambda x: x.get("credibility", 0), reverse=True)
 
-   
-    enriched_data = sorted(
-        enriched_data,
-        key=lambda x: x.get("credibility", 0),
-        reverse=True
-    )
-
+    # keep only top 5
     top_data = enriched_data[:5]
 
 
-    
     references = []
     for item in top_data:
         references.append({
@@ -80,7 +71,6 @@ def research_topic(topic: str):
             "url": item.get("url"),
             "source": item.get("source")
         })
-
 
     return {
         "domain": domain,
