@@ -1,85 +1,49 @@
-from fastapi import FastAPI
-from app.schemas.request import TopicRequest
-from app.agents.writer import generate_critical_analysis
-from app.agents.researcher import research_topic
-from app.utils.pdf_generator import generate_pdf
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+import os
+
+from app.schemas.request import TopicRequest
+from app.agents.writer import write_full_report, generate_critical_analysis
+from app.agents.researcher import research_topic
 from app.agents.followup import answer_followup
 from app.agents.perspective import generate_perspectives
 from app.agents.comparator import compare_topics
-
-from fastapi.middleware.cors import CORSMiddleware 
+from app.agents.planner import create_plan
+from app.utils.pdf_generator import generate_pdf
 from app.utils.docx_generator import generate_docx
-from pydantic import BaseModel
-from app.agents.writer import write_full_report
-import os
+
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   
+    allow_origins=["http://localhost:5173"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
 class FollowUpRequest(BaseModel):
     question: str
     report: dict
 
+class DownloadRequest(BaseModel):
+    topic: str
+    sections: dict
 
-def split_sections(text):
-    sections = {}
-    current = None
-
-    for line in text.split("\n"):
-        line = line.strip()
-
-        
-        if line.startswith("### "):
-            current = line.replace("### ", "").strip()
-            sections[current] = ""
-        
-        
-        elif line in [
-            "Abstract",
-            "Introduction",
-            "Literature Review",
-            "Methodology",
-            "Findings",
-            "Discussion",
-            "Conclusion",
-            "Future Work"
-        ]:
-            current = line
-            sections[current] = ""
-
-        elif current:
-            sections[current] += line + " "
-
-    return sections
-
-def format_references(data):
-    refs = []
-    for i, item in enumerate(data, start=1):
-        refs.append({
-            "id": i,
-            "title": item.get("title"),
-            "source": item.get("source"),
-            "date": item.get("date"),
-            "url":item.get("url")
-        })
-    return refs
 
 @app.get("/")
 def home():
-    return {"message": "AI Research Agent is running "}
+    return {"message": "AI Research Agent is running"}
 
 
 @app.post("/generate-report")
 async def generate_report(data: TopicRequest):
     try:
+
        
         if " vs " in data.topic.lower():
             comparison = compare_topics(data.topic)
@@ -89,79 +53,86 @@ async def generate_report(data: TopicRequest):
                 "result": comparison
             }
 
-        
+        #  research the topic
         try:
             research_result = research_topic(data.topic)
         except Exception as e:
-            print("RESEARCH ERROR:", e)
+            print("Research error:", e)
             research_result = {
                 "domain": "General",
                 "source": "Fallback",
-                "data": []
+                "data": [],
+                "references": []
             }
 
-        raw_report = write_full_report(data.topic, research_result)
-        split_report = split_sections(raw_report)
+        #  create section plan
+        plan = create_plan(data.topic, data.custom_format)
 
+        #  write full report section by section
+        sections = write_full_report(data.topic, research_result, plan)
+
+        #  generate analysis and perspectives
         analysis = generate_critical_analysis(data.topic, research_result)
         perspectives = generate_perspectives(data.topic, research_result)
-        
-        refs=format_references(research_result.get("data",[]))
+
+        # get references from researcher 
+        references = research_result.get("references", [])
+
         return {
             "type": "research",
             "topic": data.topic,
             "domain": research_result.get("domain"),
             "source": research_result.get("source"),
-            "sections": split_report,
+            "sections": sections,
             "perspectives": perspectives,
             "critical_analysis": analysis,
-            "references": refs,
+            "references": references
         }
 
     except Exception as e:
-        return {"error": str(e)}
-    
+        print("Generate report error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/ask-followup")
 def ask_followup(data: FollowUpRequest):
-    answer = answer_followup(data.question, data.report)
+    try:
+        answer = answer_followup(data.question, data.report)
+        return {
+            "question": data.question,
+            "answer": answer
+        }
+    except Exception as e:
+        print("Followup error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return {
-        "question": data.question,
-        "answer": answer
-    }
 
 @app.post("/download-pdf")
-def download_pdf(data: dict):
+def download_pdf(data: DownloadRequest):
     try:
-        file_path = generate_pdf(
-            data.get("topic"),
-            data.get("sections")
-        )
+        file_path = generate_pdf(data.topic, data.sections)
 
-        
         if not os.path.exists(file_path):
-            return {"error": "PDF not generated"}
+            raise HTTPException(status_code=500, detail="PDF not generated")
 
         return FileResponse(
             path=file_path,
             filename="research_report.pdf",
-            media_type="application/pdf"   
+            media_type="application/pdf"
         )
 
     except Exception as e:
-        print("PDF ERROR:", e)
-        return {"error": str(e)}
-    
+        print("PDF error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/download-docx")
-def download_docx(data: dict):
+def download_docx(data: DownloadRequest):
     try:
-        file_path = generate_docx(
-            data.get("topic"),
-            data.get("sections")
-        )
+        file_path = generate_docx(data.topic, data.sections)
 
         if not os.path.exists(file_path):
-            return {"error": "DOCX not generated"}
+            raise HTTPException(status_code=500, detail="DOCX not generated")
 
         return FileResponse(
             path=file_path,
@@ -170,5 +141,5 @@ def download_docx(data: dict):
         )
 
     except Exception as e:
-        print("DOCX ERROR:", e)
-        return {"error": str(e)}
+        print("DOCX error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
