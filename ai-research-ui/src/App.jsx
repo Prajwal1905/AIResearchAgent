@@ -4,22 +4,48 @@ import remarkGfm from "remark-gfm";
 
 const API = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
+const SUGGESTED_TOPICS = [
+  "Impact of AI on healthcare",
+  "Climate change and renewable energy",
+  "Transformer neural networks",
+  "Mental health in teenagers",
+];
+
 function App() {
   const [input, setInput] = useState("");
   const [chat, setChat] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastReport, setLastReport] = useState(null);
   const [customFormat, setCustomFormat] = useState("");
+  const [showFormat, setShowFormat] = useState(false);
+  const [loadingText, setLoadingText] = useState("Searching sources...");
   const endRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chat]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  useEffect(() => {
+    if (!loading) return;
+    const messages = [
+      "Searching sources...",
+      "Reading articles...",
+      "Analysing research...",
+      "Writing report...",
+      "Almost done...",
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % messages.length;
+      setLoadingText(messages[i]);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [loading]);
 
-    const userInput = input;
+  const handleSend = async (topicOverride = null) => {
+    const userInput = topicOverride || input;
+    if (!userInput.trim()) return;
+
     setInput("");
     setChat((prev) => [...prev, { role: "user", text: userInput }]);
     setLoading(true);
@@ -27,49 +53,41 @@ function App() {
     try {
       let res, data;
 
-      // if a report already exists, treat next message as follow-up question
       if (lastReport) {
         res = await fetch(`${API}/ask-followup`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            question: userInput,
-            report: lastReport,
-          }),
+          body: JSON.stringify({ question: userInput, report: lastReport }),
         });
-
         data = await res.json();
-
         setChat((prev) => [
           ...prev,
           { role: "ai", text: data.answer || "No answer returned." },
         ]);
-
       } else {
-        // generate a new research report
         res = await fetch(`${API}/generate-report`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             topic: userInput,
-            custom_format: customFormat || null,  // send custom format to backend
+            custom_format: customFormat || "",
           }),
         });
-
         data = await res.json();
 
-        // handle comparison type response
         if (data.type === "comparison") {
           setLastReport(data);
           setChat((prev) => [...prev, { role: "ai", data: data }]);
           return;
         }
 
-        // handle empty sections
         if (!data.sections || Object.keys(data.sections).length === 0) {
           setChat((prev) => [
             ...prev,
-            { role: "ai", text: "No content generated. Try another topic." },
+            {
+              role: "ai",
+              text: "No content generated. Please try another topic.",
+            },
           ]);
           return;
         }
@@ -77,39 +95,34 @@ function App() {
         setLastReport(data);
         setChat((prev) => [...prev, { role: "ai", data: data }]);
       }
-
     } catch (err) {
       console.error(err);
       setChat((prev) => [
         ...prev,
-        { role: "ai", text: "Backend connection failed. Is the server running?" },
+        {
+          role: "ai",
+          text: "Could not connect to server. Please make sure the backend is running.",
+        },
       ]);
     } finally {
-      setLoading(false);  // always stop loading even if error happens
+      setLoading(false);
+      setLoadingText("Searching sources...");
     }
   };
 
-  // converts [1] [2] in text into clickable links using references
   const renderWithCitations = (text, references) => {
     let str = "";
-
-    if (typeof text === "string") {
-      str = text;
-    } else if (Array.isArray(text)) {
-      str = text.map((item) => (typeof item === "string" ? item : "")).join("");
-    } else {
-      return text;
-    }
+    if (typeof text === "string") str = text;
+    else if (Array.isArray(text))
+      str = text.map((i) => (typeof i === "string" ? i : "")).join("");
+    else return text;
 
     const parts = str.split(/(\[\d+\])/g);
-
     return parts.map((part, i) => {
       const match = part.match(/\[(\d+)\]/);
-
       if (match) {
         const refId = parseInt(match[1]);
         const ref = references?.find((r) => r.id === refId);
-
         if (ref) {
           return (
             <a
@@ -118,14 +131,13 @@ function App() {
               target="_blank"
               rel="noreferrer"
               title={ref.title}
-              className="text-blue-400 underline mx-0.5 cursor-pointer"
+              className="text-blue-400 hover:underline font-mono text-xs mx-0.5"
             >
               [{refId}]
             </a>
           );
         }
       }
-
       return part;
     });
   };
@@ -134,13 +146,13 @@ function App() {
     setChat([]);
     setLastReport(null);
     setCustomFormat("");
+    setShowFormat(false);
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownload = async (type) => {
     if (!lastReport) return;
-
     try {
-      const res = await fetch(`${API}/download-pdf`, {
+      const res = await fetch(`${API}/download-${type}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -148,284 +160,347 @@ function App() {
           sections: lastReport.sections,
         }),
       });
-
       if (!res.ok) {
-        alert("PDF download failed");
+        alert(`${type.toUpperCase()} download failed`);
         return;
       }
-
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "research_report.pdf";
+      a.download = `research_report.${type === "pdf" ? "pdf" : "docx"}`;
       a.click();
       window.URL.revokeObjectURL(url);
-
     } catch (e) {
-      console.error(e);
-      alert("Failed to download PDF");
-    }
-  };
-
-  const handleDownloadDOCX = async () => {
-    if (!lastReport) return;
-
-    try {
-      const res = await fetch(`${API}/download-docx`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic: lastReport.topic,
-          sections: lastReport.sections,
-        }),
-      });
-
-      if (!res.ok) {
-        alert("DOCX download failed");
-        return;
-      }
-
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "research_report.docx";
-      a.click();
-      window.URL.revokeObjectURL(url);
-
-    } catch (e) {
-      console.error(e);
-      alert("Failed to download DOCX");
+      alert(`Failed to download ${type.toUpperCase()}`);
     }
   };
 
   return (
-    <div className="bg-[#0b0f19] text-gray-200 min-h-screen flex flex-col">
+    <div
+      className="bg-[#0f0f0f] text-gray-300 min-h-screen flex flex-col"
+      style={{ fontFamily: "'Georgia', serif" }}
+    >
+      <header className="border-b border-white/8 bg-[#0f0f0f] sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-8 py-5 flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <span className="text-white font-semibold text-sm tracking-widest uppercase">
+              Research Agent
+            </span>
+            {lastReport?.domain && (
+              <span className="text-xs text-gray-500 border border-white/10 px-2 py-0.5 rounded">
+                {lastReport.domain}
+              </span>
+            )}
+          </div>
 
-     
-      <div className="px-6 py-4 border-b border-gray-800 flex justify-between items-center text-sm text-gray-400">
-        <div className="flex gap-4 items-center">
-          <span>AI Research Assistant</span>
+          <div className="flex items-center gap-4">
+            {lastReport && (
+              <>
+                <button
+                  onClick={() => handleDownload("pdf")}
+                  className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/25 px-3 py-1.5 rounded transition-all"
+                >
+                  Download PDF
+                </button>
+                <button
+                  onClick={() => handleDownload("docx")}
+                  className="text-xs text-white bg-white/10 hover:bg-white/15 border border-white/15 px-3 py-1.5 rounded transition-all"
+                >
+                  Download Word
+                </button>
+              </>
+            )}
+            {chat.length > 0 && (
+              <button
+                onClick={handleNewChat}
+                className="text-xs text-gray-500 hover:text-white transition-colors"
+              >
+                New Chat
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
 
-          {lastReport && (
-            <div className="flex gap-2">
-              <button
-                onClick={handleDownloadPDF}
-                className="text-xs bg-gray-700 px-2 py-1 rounded hover:bg-gray-600"
-              >
-                Download PDF
-              </button>
-              <button
-                onClick={handleDownloadDOCX}
-                className="text-xs bg-blue-700 px-2 py-1 rounded hover:bg-blue-600"
-              >
-                Download Word
-              </button>
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-3xl mx-auto px-8 py-10 space-y-10">
+          {chat.length === 0 && (
+            <div className="mt-20 space-y-10">
+              <div className="space-y-2">
+                <h1 className="text-2xl text-white font-semibold">
+                  What would you like to research?
+                </h1>
+                <p className="text-gray-500 text-sm">
+                  Generate full academic research papers on any topic — medical,
+                  technology, law, finance, history, and more.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {SUGGESTED_TOPICS.map((topic) => (
+                  <button
+                    key={topic}
+                    onClick={() => handleSend(topic)}
+                    className="text-left text-sm text-gray-400 hover:text-white border border-white/8 hover:border-white/20 px-4 py-3 rounded-lg transition-all bg-white/2 hover:bg-white/5"
+                  >
+                    {topic}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
-        </div>
 
-        <button onClick={handleNewChat} className="text-xs hover:text-white">
-          New Chat
-        </button>
-      </div>
-
-      
-      <div className="flex-1 overflow-y-auto max-w-2xl mx-auto w-full px-4 py-8 space-y-8">
-
-        {chat.length === 0 && (
-          <div className="text-center mt-32 text-gray-500 text-xl">
-            Ask anything...
-          </div>
-        )}
-
-        {chat.map((msg, i) =>
-          msg.role === "user" ? (
-            <div key={i} className="text-right">
-              <div className="inline-block bg-gray-800 px-4 py-2 rounded-xl">
-                {msg.text}
-              </div>
-            </div>
-          ) : (
-            <div key={i} className="space-y-6 leading-relaxed">
-
-              
-              <div className="text-right">
-                <button
-                  onClick={() =>
-                    navigator.clipboard.writeText(
-                      msg.text || JSON.stringify(msg.data)
-                    )
-                  }
-                  className="text-xs text-gray-500 hover:text-white"
-                >
-                  Copy
-                </button>
-              </div>
-
-              
-              {msg.text && (
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    p({ children }) {
-                      return (
-                        <p>
-                          {renderWithCitations(
-                            children,
-                            lastReport?.references
-                          )}
-                        </p>
-                      );
-                    },
-                    a({ href, children }) {
-                      return (
-                        <a href={href} target="_blank" rel="noreferrer" className="text-blue-400 underline">
-                          {children}
-                        </a>
-                      );
-                    },
-                  }}
-                >
+          {chat.map((msg, i) =>
+            msg.role === "user" ? (
+              <div key={i} className="flex justify-end">
+                <div className="bg-white/6 border border-white/10 text-white px-5 py-3 rounded-lg max-w-lg text-sm leading-relaxed">
                   {msg.text}
-                </ReactMarkdown>
-              )}
-
-              
-              {msg.data?.type === "comparison" && msg.data?.result && (
-                <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">
-                    Comparison: {msg.data.topic}
-                  </h2>
-                  <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.data.result}
-                    </ReactMarkdown>
-                  </div>
                 </div>
-              )}
-
-             
-              {msg.data?.sections &&
-                Object.entries(msg.data.sections).map(([key, value]) => (
-                  <div key={key}>
-                    <h2 className="text-lg font-semibold text-white mb-2">{key}</h2>
+              </div>
+            ) : (
+              <div key={i} className="space-y-6">
+                {msg.text && (
+                  <div className="text-sm text-gray-300 leading-relaxed">
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
                         p({ children }) {
                           return (
-                            <p>
-                              {renderWithCitations(children, msg.data?.references)}
+                            <p className="mb-3 last:mb-0">
+                              {renderWithCitations(
+                                children,
+                                lastReport?.references,
+                              )}
                             </p>
+                          );
+                        },
+                        a({ href, children }) {
+                          return (
+                            <a
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-400 underline"
+                            >
+                              {children}
+                            </a>
                           );
                         },
                       }}
                     >
-                      {value || "No content"}
+                      {msg.text}
                     </ReactMarkdown>
                   </div>
-                ))}
+                )}
 
-              
-              {msg.data?.perspectives && (
-                <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">Perspectives</h2>
-                  <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.data.perspectives}
-                    </ReactMarkdown>
+                {msg.data?.type === "comparison" && msg.data?.result && (
+                  <div className="space-y-4">
+                    <div className="border-b border-white/8 pb-3">
+                      <p className="text-xs uppercase tracking-widest text-gray-500 mb-1">
+                        Comparison
+                      </p>
+                      <h2 className="text-white text-lg font-semibold">
+                        {msg.data.topic}
+                      </h2>
+                    </div>
+                    <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.data.result}
+                      </ReactMarkdown>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              
-              {msg.data?.critical_analysis && (
-                <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">Critical Analysis</h2>
-                  <div className="prose prose-invert text-gray-400">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {msg.data.critical_analysis}
-                    </ReactMarkdown>
+                {msg.data?.sections && (
+                  <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
+                    <span>
+                      {Object.keys(msg.data.sections).length} sections
+                    </span>
+                    {msg.data.domain && <span>{msg.data.domain}</span>}
+                    {msg.data.source && <span>via {msg.data.source}</span>}
+                    <button
+                      onClick={() =>
+                        navigator.clipboard.writeText(JSON.stringify(msg.data))
+                      }
+                      className="ml-auto hover:text-gray-400 transition-colors"
+                    >
+                      Copy
+                    </button>
                   </div>
-                </div>
-              )}
+                )}
 
-              
-              {msg.data?.references?.length > 0 && (
-                <div>
-                  <h2 className="text-lg font-semibold text-white mb-2">References</h2>
-                  <div className="space-y-1 text-sm text-gray-500">
-                    {msg.data.references.map((ref) => (
-                      <div key={ref.id}>
-                        {ref.id}.{" "}
-                        <a
-                          href={ref.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-blue-400 hover:underline"
+                {msg.data?.sections &&
+                  Object.entries(msg.data.sections).map(([key, value]) => (
+                    <div key={key} className="space-y-3">
+                      <h2 className="text-white text-sm font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                        {key}
+                      </h2>
+                      <div className="text-sm text-gray-300 leading-relaxed">
+                        <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
+                          components={{
+                            p({ children }) {
+                              return (
+                                <p className="mb-3 last:mb-0">
+                                  {renderWithCitations(
+                                    children,
+                                    msg.data?.references,
+                                  )}
+                                </p>
+                              );
+                            },
+                            table({ children }) {
+                              return (
+                                <div className="overflow-x-auto my-4">
+                                  <table className="w-full text-xs border-collapse border border-white/10">
+                                    {children}
+                                  </table>
+                                </div>
+                              );
+                            },
+                            th({ children }) {
+                              return (
+                                <th className="border border-white/10 bg-white/5 px-4 py-2 text-left text-white font-medium">
+                                  {children}
+                                </th>
+                              );
+                            },
+                            td({ children }) {
+                              return (
+                                <td className="border border-white/10 px-4 py-2">
+                                  {children}
+                                </td>
+                              );
+                            },
+                          }}
                         >
-                          {ref.title}
-                        </a>{" "}
-                        ({ref.source})
+                          {value || "No content"}
+                        </ReactMarkdown>
                       </div>
-                    ))}
+                    </div>
+                  ))}
+
+                {msg.data?.perspectives && (
+                  <div className="space-y-3">
+                    <h2 className="text-white text-sm font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                      Perspectives
+                    </h2>
+                    <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.data.perspectives}
+                      </ReactMarkdown>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-            </div>
-          )
-        )}
+                {msg.data?.critical_analysis && (
+                  <div className="space-y-3">
+                    <h2 className="text-white text-sm font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                      Critical Analysis
+                    </h2>
+                    <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {msg.data.critical_analysis}
+                      </ReactMarkdown>
+                    </div>
+                  </div>
+                )}
 
-        {loading && (
-          <div className="text-center text-gray-400 animate-pulse">
-            Generating research...
-          </div>
-        )}
-
-        <div ref={endRef} />
-      </div>
-
-     
-      <div className="border-t border-gray-800 p-4 bg-[#0b0f19]">
-        <div className="max-w-2xl mx-auto flex flex-col gap-2">
-
-          
-          {!lastReport && (
-            <textarea
-              value={customFormat}
-              onChange={(e) => setCustomFormat(e.target.value)}
-              placeholder="Optional: paste your college/custom research format here"
-              className="w-full bg-gray-800 px-4 py-2 rounded-xl text-white placeholder-gray-500 outline-none text-sm"
-              rows={2}
-            />
+                {msg.data?.references?.length > 0 && (
+                  <div className="space-y-3">
+                    <h2 className="text-white text-sm font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                      References
+                    </h2>
+                    <div className="space-y-2">
+                      {msg.data.references.map((ref) => (
+                        <div
+                          key={ref.id}
+                          className="flex gap-3 text-xs text-gray-500"
+                        >
+                          <span className="font-mono shrink-0 text-gray-600">
+                            [{ref.id}]
+                          </span>
+                          <div>
+                            <a
+                              href={ref.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-gray-400 hover:text-white hover:underline transition-colors"
+                            >
+                              {ref.title}
+                            </a>
+                            {ref.source && (
+                              <span className="text-gray-700 ml-2">
+                                {ref.source}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ),
           )}
 
-          <div className="flex gap-2">
+          {loading && (
+            <div className="text-sm text-gray-500 italic">{loadingText}</div>
+          )}
+
+          <div ref={endRef} />
+        </div>
+      </main>
+
+      <footer className="border-t border-white/8 bg-[#0f0f0f] p-6">
+        <div className="max-w-3xl mx-auto space-y-3">
+          {!lastReport && (
+            <div>
+              <button
+                onClick={() => setShowFormat(!showFormat)}
+                className="text-xs text-gray-600 hover:text-gray-400 transition-colors mb-2"
+              >
+                {showFormat ? "Hide" : "Custom format (optional)"}
+              </button>
+              {showFormat && (
+                <textarea
+                  value={customFormat}
+                  onChange={(e) => setCustomFormat(e.target.value)}
+                  placeholder="Paste your college or custom research format here..."
+                  className="w-full bg-transparent border border-white/10 px-4 py-3 rounded-lg text-white placeholder-gray-700 outline-none text-xs resize-none focus:border-white/20 transition-colors"
+                  rows={3}
+                />
+              )}
+            </div>
+          )}
+
+          <div className="flex gap-3">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !loading && handleSend()}
-              placeholder={lastReport ? "Ask a follow-up question..." : "Enter a research topic..."}
-              className="flex-1 bg-gray-800 px-4 py-3 rounded-xl outline-none text-white placeholder-gray-500"
+              placeholder={
+                lastReport
+                  ? "Ask a follow-up question..."
+                  : "Enter a research topic..."
+              }
+              className="flex-1 bg-transparent border border-white/10 focus:border-white/25 px-4 py-3 rounded-lg outline-none text-white placeholder-gray-600 text-sm transition-colors"
             />
             <button
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={loading}
-              className={`px-5 rounded-xl font-medium ${
+              className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
                 loading
-                  ? "bg-gray-500 text-gray-300 cursor-not-allowed"
-                  : "bg-white text-black hover:bg-gray-200"
+                  ? "text-gray-600 border border-white/8 cursor-not-allowed"
+                  : "text-white bg-white/10 hover:bg-white/15 border border-white/15"
               }`}
             >
-              {loading ? "Sending..." : "Send"}
+              {loading ? "Working..." : "Send"}
             </button>
           </div>
         </div>
-      </div>
-
+      </footer>
     </div>
   );
 }
