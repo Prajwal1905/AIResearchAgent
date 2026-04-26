@@ -1,16 +1,25 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from typing import List, Union
 import os
+import shutil
+import uuid
 
-from app.schemas.request import TopicRequest
+from app.schemas.request import (
+    TopicRequest,
+    FollowUpRequest,
+    DownloadRequest,
+    ScriptRequest
+)
 from app.agents.writer import write_full_report, generate_critical_analysis
 from app.agents.researcher import research_topic
 from app.agents.followup import answer_followup
 from app.agents.perspective import generate_perspectives
 from app.agents.comparator import compare_topics
 from app.agents.planner import create_plan
+from app.agents.script_generator import generate_script
+from app.agents.literature_reviewer import generate_literature_review
 from app.utils.pdf_generator import generate_pdf
 from app.utils.docx_generator import generate_docx
 
@@ -19,32 +28,25 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-class FollowUpRequest(BaseModel):
-    question: str
-    report: dict
-
-class DownloadRequest(BaseModel):
-    topic: str
-    sections: dict
 
 
 @app.get("/")
 def home():
-    return {"message": "AI Research Agent is running"}
+    return {"message": "Synthex AI Platform is running"}
 
 
 @app.post("/generate-report")
 async def generate_report(data: TopicRequest):
     try:
-
-       
         if " vs " in data.topic.lower():
             comparison = compare_topics(data.topic)
             return {
@@ -53,7 +55,6 @@ async def generate_report(data: TopicRequest):
                 "result": comparison
             }
 
-        #  research the topic
         try:
             research_result = research_topic(data.topic)
         except Exception as e:
@@ -65,17 +66,10 @@ async def generate_report(data: TopicRequest):
                 "references": []
             }
 
-        #  create section plan
         plan = create_plan(data.topic, data.custom_format)
-
-        #  write full report section by section
         sections = write_full_report(data.topic, research_result, plan)
-
-        #  generate analysis and perspectives
         analysis = generate_critical_analysis(data.topic, research_result)
         perspectives = generate_perspectives(data.topic, research_result)
-
-        # get references from researcher 
         references = research_result.get("references", [])
 
         return {
@@ -94,14 +88,55 @@ async def generate_report(data: TopicRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/generate-script")
+async def generate_script_route(data: ScriptRequest):
+    try:
+        result = generate_script(data.topic, data.style)
+        return {"type": "script", **result}
+    except Exception as e:
+        print("Script error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/generate-literature-review")
+async def generate_literature_review_route(
+    topic: str = Form(...),
+    files: List[UploadFile] = File(...)
+):
+    try:
+        saved_paths = []
+        for file in files:
+            if not file.filename.endswith(".pdf"):
+                continue
+            unique_name = f"{uuid.uuid4()}_{file.filename}"
+            file_path = os.path.join(UPLOAD_DIR, unique_name)
+            with open(file_path, "wb") as f:
+                shutil.copyfileobj(file.file, f)
+            saved_paths.append(file_path)
+
+        if not saved_paths:
+            raise HTTPException(status_code=400, detail="Please upload at least one PDF file")
+
+        result = generate_literature_review(topic, saved_paths)
+
+        for path in saved_paths:
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+        return {"type": "literature_review", **result}
+
+    except Exception as e:
+        print("Literature review error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/ask-followup")
 def ask_followup(data: FollowUpRequest):
     try:
         answer = answer_followup(data.question, data.report)
-        return {
-            "question": data.question,
-            "answer": answer
-        }
+        return {"question": data.question, "answer": answer}
     except Exception as e:
         print("Followup error:", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -111,16 +146,13 @@ def ask_followup(data: FollowUpRequest):
 def download_pdf(data: DownloadRequest):
     try:
         file_path = generate_pdf(data.topic, data.sections)
-
         if not os.path.exists(file_path):
             raise HTTPException(status_code=500, detail="PDF not generated")
-
         return FileResponse(
             path=file_path,
-            filename="research_report.pdf",
+            filename="report.pdf",
             media_type="application/pdf"
         )
-
     except Exception as e:
         print("PDF error:", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -130,16 +162,13 @@ def download_pdf(data: DownloadRequest):
 def download_docx(data: DownloadRequest):
     try:
         file_path = generate_docx(data.topic, data.sections)
-
         if not os.path.exists(file_path):
             raise HTTPException(status_code=500, detail="DOCX not generated")
-
         return FileResponse(
             path=file_path,
-            filename="research_report.docx",
+            filename="report.docx",
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
-
     except Exception as e:
         print("DOCX error:", e)
         raise HTTPException(status_code=500, detail=str(e))
