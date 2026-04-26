@@ -35,10 +35,13 @@ def get_section_instruction(section: str) -> str:
 
 def write_section(topic: str, section: str, research_result: dict, previous_content: str = "") -> str:
 
+    
+    if isinstance(section, list):
+        section = " - ".join([str(s) for s in section])
+
     domain = research_result.get("domain", "General")
     references = research_result.get("references", [])
 
-  
     ref_text = "\n".join([
         f"[{ref['id']}] {ref.get('title')} - {ref.get('url')}"
         for ref in references
@@ -85,7 +88,6 @@ def generate_critical_analysis(topic: str, research_result: dict) -> str:
 
     data = research_result.get("data", [])
 
-    
     context = "\n".join([
         f"- {item.get('title')}: {item.get('summary', '')}"
         for item in data
@@ -115,7 +117,6 @@ Rules:
 
 def write_full_report(topic: str, research_result: dict, plan: list = None) -> dict:
 
-
     if not plan:
         plan = [
             "Abstract",
@@ -137,7 +138,6 @@ def write_full_report(topic: str, research_result: dict, plan: list = None) -> d
         content = write_section(topic, section, research_result, previous_content)
         report[section] = content
 
-        
         previous_content += f"\n{section}: {content[:300]}"
 
     return report
