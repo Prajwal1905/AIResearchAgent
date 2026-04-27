@@ -59,7 +59,7 @@ const LOADING_MESSAGES = {
   explainer: [
     "Reading your paper...",
     "Understanding the research...",
-    "Writing simple explanation...",
+    "Writing explanation...",
     "Analysing limitations...",
     "Almost done...",
   ],
@@ -109,6 +109,7 @@ function App() {
   const [scriptStyle, setScriptStyle] = useState("educational");
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [explainerFile, setExplainerFile] = useState(null);
+  const [explainerLevel, setExplainerLevel] = useState("student");
   const [loadingText, setLoadingText] = useState("Working...");
   const [sessions, setSessions] = useState(loadSessions);
   const [activeSessionId, setActiveSessionId] = useState(null);
@@ -320,6 +321,7 @@ function App() {
       } else if (mode === "explainer") {
         const formData = new FormData();
         formData.append("topic", userInput);
+        formData.append("level", explainerLevel);
         formData.append("file", explainerFile);
         res = await fetch(`${API}/explain-paper`, {
           method: "POST",
@@ -482,19 +484,6 @@ function App() {
       </div>
     );
 
-  const ExplainerBlock = ({ label, content, accent = false }) => (
-    <div className="space-y-3">
-      <h2
-        className={`text-xs font-semibold uppercase tracking-widest border-b pb-2 ${accent ? "text-blue-400 border-blue-400/20" : "text-white border-white/8"}`}
-      >
-        {label}
-      </h2>
-      <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
-        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-      </div>
-    </div>
-  );
-
   const today = sessions.filter((s) => Date.now() - s.updatedAt < 86400000);
   const yesterday = sessions.filter(
     (s) =>
@@ -541,7 +530,6 @@ function App() {
       className="bg-[#0f0f0f] text-gray-300 min-h-screen flex"
       style={{ fontFamily: "'Georgia', serif" }}
     >
-      {/* SIDEBAR */}
       <aside
         className={`${sidebarOpen ? "w-64" : "w-0"} shrink-0 transition-all duration-300 overflow-hidden border-r border-white/8 flex flex-col`}
       >
@@ -571,9 +559,7 @@ function App() {
         </div>
       </aside>
 
-      {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* HEADER */}
         <header className="border-b border-white/8 bg-[#0f0f0f] sticky top-0 z-10">
           <div className="px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -622,7 +608,6 @@ function App() {
           </div>
         </header>
 
-        {/* CHAT */}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-10 space-y-10">
             {chat.length === 0 && (
@@ -643,7 +628,7 @@ function App() {
                   {mode === "literature" &&
                     "Upload research PDFs and get themes, gaps, research questions and hypotheses."}
                   {mode === "explainer" &&
-                    "Upload any research paper and get simple explanations for beginners, students and professionals — plus what it actually proves."}
+                    "Upload any research paper and get explanation at your chosen level — beginner, student, professional or full analysis."}
                 </p>
               </div>
             )}
@@ -679,7 +664,6 @@ function App() {
                     </div>
                   )}
 
-                  {/* RESEARCH */}
                   {msg.data?.type === "research" && (
                     <div className="space-y-8">
                       <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
@@ -728,7 +712,6 @@ function App() {
                     </div>
                   )}
 
-                  {/* COMPARISON */}
                   {msg.data?.type === "comparison" && (
                     <div className="space-y-4">
                       <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
@@ -742,7 +725,6 @@ function App() {
                     </div>
                   )}
 
-                  {/* SCRIPT */}
                   {msg.data?.type === "script" && (
                     <div className="space-y-8">
                       <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
@@ -799,7 +781,6 @@ function App() {
                     </div>
                   )}
 
-                  {/* LITERATURE REVIEW */}
                   {msg.data?.type === "literature_review" && (
                     <div className="space-y-8">
                       <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
@@ -831,40 +812,53 @@ function App() {
                         </div>
                       )}
                       {msg.data.review && (
-                        <ExplainerBlock
-                          label="Literature Review"
-                          content={msg.data.review}
-                        />
+                        <div className="space-y-3">
+                          <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                            Literature Review
+                          </h2>
+                          <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.data.review}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
                       )}
                       {msg.data.research_questions && (
-                        <ExplainerBlock
-                          label="Research Gaps and Questions"
-                          content={msg.data.research_questions}
-                        />
+                        <div className="space-y-3">
+                          <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                            Research Gaps and Questions
+                          </h2>
+                          <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.data.research_questions}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
 
-                  {/* PAPER EXPLAINER */}
                   {msg.data?.type === "paper_explainer" && (
                     <div className="space-y-8">
                       <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
                         <span className="uppercase tracking-widest">
                           Paper Explained
                         </span>
+                        <span className="capitalize">
+                          {msg.data.level} level
+                        </span>
                         <button
                           onClick={() =>
                             navigator.clipboard.writeText(
-                              `ELI5:\n${msg.data.eli5}\n\nStudent:\n${msg.data.student}\n\nProfessional:\n${msg.data.professional}`,
+                              msg.data.explanation || "",
                             )
                           }
                           className="ml-auto hover:text-gray-400 transition-colors"
                         >
-                          Copy All
+                          Copy
                         </button>
                       </div>
 
-                      {/* paper meta */}
                       {msg.data.meta && (
                         <div className="bg-white/3 border border-white/8 rounded-lg p-4">
                           <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">
@@ -876,74 +870,48 @@ function App() {
                         </div>
                       )}
 
-                      {/* key facts */}
                       {msg.data.key_facts && (
-                        <ExplainerBlock
-                          label="Key Facts and Numbers"
-                          content={msg.data.key_facts}
-                          accent={true}
-                        />
-                      )}
-
-                      {/* 3 explanation levels */}
-                      {msg.data.eli5 && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <h2 className="text-white text-xs font-semibold uppercase tracking-widest">
-                              Explain Like I am 5
-                            </h2>
-                            <span className="text-xs text-gray-600 border border-white/8 px-2 py-0.5 rounded">
-                              Beginner
-                            </span>
-                          </div>
-                          <div className="border-l-2 border-white/15 pl-4 text-sm text-gray-300 leading-relaxed">
-                            {msg.data.eli5}
-                          </div>
-                        </div>
-                      )}
-
-                      {msg.data.student && (
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <h2 className="text-white text-xs font-semibold uppercase tracking-widest">
-                              Student Explanation
-                            </h2>
-                            <span className="text-xs text-gray-600 border border-white/8 px-2 py-0.5 rounded">
-                              Undergraduate
-                            </span>
-                          </div>
+                          <h2 className="text-blue-400 text-xs font-semibold uppercase tracking-widest border-b border-blue-400/20 pb-2">
+                            Key Facts and Numbers
+                          </h2>
                           <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {msg.data.student}
+                              {msg.data.key_facts}
                             </ReactMarkdown>
                           </div>
                         </div>
                       )}
 
-                      {msg.data.professional && (
+                      {msg.data.explanation && (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <h2 className="text-white text-xs font-semibold uppercase tracking-widest">
-                              Professional Summary
-                            </h2>
-                            <span className="text-xs text-gray-600 border border-white/8 px-2 py-0.5 rounded">
-                              Executive
-                            </span>
-                          </div>
+                          <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                            {msg.data.level === "eli5" && "Explain Like I am 5"}
+                            {msg.data.level === "student" &&
+                              "Student Explanation"}
+                            {msg.data.level === "professional" &&
+                              "Professional Summary"}
+                            {msg.data.level === "full" && "Full Explanation"}
+                          </h2>
                           <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {msg.data.professional}
+                              {msg.data.explanation}
                             </ReactMarkdown>
                           </div>
                         </div>
                       )}
 
-                      {/* critical analysis */}
                       {msg.data.analysis && (
-                        <ExplainerBlock
-                          label="Critical Analysis"
-                          content={msg.data.analysis}
-                        />
+                        <div className="space-y-3">
+                          <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
+                            Critical Analysis
+                          </h2>
+                          <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {msg.data.analysis}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
                       )}
                     </div>
                   )}
@@ -958,7 +926,6 @@ function App() {
           </div>
         </main>
 
-        {/* INPUT */}
         <footer className="border-t border-white/8 bg-[#0f0f0f] p-6">
           <div className="max-w-3xl mx-auto space-y-3">
             {mode === "research" && !lastReport && (
@@ -1027,22 +994,42 @@ function App() {
             )}
 
             {mode === "explainer" && (
-              <div>
-                <input
-                  type="file"
-                  ref={explainerFileRef}
-                  accept=".pdf"
-                  className="hidden"
-                  onChange={(e) => setExplainerFile(e.target.files[0] || null)}
-                />
-                <button
-                  onClick={() => explainerFileRef.current.click()}
-                  className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/25 px-4 py-2 rounded-lg transition-all"
-                >
-                  {explainerFile
-                    ? `Selected: ${explainerFile.name}`
-                    : "Upload PDF to explain"}
-                </button>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  {[
+                    { id: "eli5", label: "ELI5" },
+                    { id: "student", label: "Student" },
+                    { id: "professional", label: "Professional" },
+                    { id: "full", label: "Full Analysis" },
+                  ].map((lvl) => (
+                    <button
+                      key={lvl.id}
+                      onClick={() => setExplainerLevel(lvl.id)}
+                      className={`text-xs px-3 py-1.5 rounded border transition-all ${explainerLevel === lvl.id ? "bg-white text-black border-white font-medium" : "border-white/10 text-gray-500 hover:text-white"}`}
+                    >
+                      {lvl.label}
+                    </button>
+                  ))}
+                </div>
+                <div>
+                  <input
+                    type="file"
+                    ref={explainerFileRef}
+                    accept=".pdf"
+                    className="hidden"
+                    onChange={(e) =>
+                      setExplainerFile(e.target.files[0] || null)
+                    }
+                  />
+                  <button
+                    onClick={() => explainerFileRef.current.click()}
+                    className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/25 px-4 py-2 rounded-lg transition-all"
+                  >
+                    {explainerFile
+                      ? `Selected: ${explainerFile.name}`
+                      : "Upload PDF to explain"}
+                  </button>
+                </div>
               </div>
             )}
 
