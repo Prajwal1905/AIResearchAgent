@@ -20,6 +20,7 @@ from app.agents.comparator import compare_topics
 from app.agents.planner import create_plan
 from app.agents.script_generator import generate_script
 from app.agents.literature_reviewer import generate_literature_review
+from app.agents.paper_explainer import explain_paper
 from app.utils.pdf_generator import generate_pdf
 from app.utils.docx_generator import generate_docx
 
@@ -36,7 +37,6 @@ app.add_middleware(
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 
 
 @app.get("/")
@@ -129,6 +129,35 @@ async def generate_literature_review_route(
 
     except Exception as e:
         print("Literature review error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/explain-paper")
+async def explain_paper_route(
+    topic: str = Form(""),
+    file: UploadFile = File(...)
+):
+    try:
+        if not file.filename.endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+        unique_name = f"{uuid.uuid4()}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, unique_name)
+
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        result = explain_paper(file_path, topic)
+
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+
+        return {"type": "paper_explainer", **result}
+
+    except Exception as e:
+        print("Paper explainer error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
