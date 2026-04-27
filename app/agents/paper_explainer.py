@@ -2,20 +2,18 @@ from app.services.llm import generate_text
 from app.services.pdf_reader import extract_text_from_pdf
 
 
-def explain_paper(file_path: str, topic: str = "") -> dict:
-    
+def explain_paper(file_path: str, topic: str = "", level: str = "student") -> dict:
     
     paper_text = extract_text_from_pdf(file_path)
 
     if not paper_text or len(paper_text) < 200:
         return {"error": "Could not extract text from PDF. Make sure it is not a scanned image."}
 
-   
     paper_text = paper_text[:6000]
 
-    print("Extracting paper metadata...")
+    print(f"Explaining paper at level: {level}")
 
-    
+   
     meta_prompt = f"""
 Read this research paper and extract:
 1. Title
@@ -31,36 +29,36 @@ Return as plain text with clear labels.
 """
     meta = generate_text(meta_prompt)
 
-    print("Generating ELI5 explanation...")
+    explanation = ""
+    analysis = ""
+    key_facts = ""
 
-    
-    eli5_prompt = f"""
+    if level == "eli5":
+        prompt = f"""
 You are explaining a research paper to a 12-year-old with no science background.
 
-Paper content:
+Paper:
 {paper_text}
 
 Explain this paper in the simplest possible way:
 - What problem were they trying to solve? (use a simple analogy)
-- What did they do to solve it? (no jargon)
+- What did they do to solve it? (no jargon at all)
 - What did they find out?
 - Why does it matter in everyday life?
 
 Rules:
-- Maximum 150 words
+- Maximum 200 words
 - No technical terms
-- Use simple analogies like "it's like when..."
-- Write like you're talking to a curious child
+- Use analogies like "it's like when..."
+- Write like talking to a curious child
 """
-    eli5 = generate_text(eli5_prompt)
+        explanation = generate_text(prompt)
 
-    print("Generating student explanation...")
-
-    
-    student_prompt = f"""
+    elif level == "student":
+        prompt = f"""
 You are explaining a research paper to an undergraduate student.
 
-Paper content:
+Paper:
 {paper_text}
 
 Write a clear explanation covering:
@@ -71,20 +69,17 @@ Write a clear explanation covering:
 - How this connects to existing knowledge
 
 Rules:
-- 250-300 words
-- Can use some technical terms but explain them
+- 300-400 words
+- Can use technical terms but explain them briefly
 - Academic but accessible tone
-- Focus on understanding not just summarizing
 """
-    student = generate_text(student_prompt)
+        explanation = generate_text(prompt)
 
-    print("Generating professional summary...")
-
-   
-    professional_prompt = f"""
+    elif level == "professional":
+        prompt = f"""
 You are writing an executive summary of a research paper for a busy professional.
 
-Paper content:
+Paper:
 {paper_text}
 
 Write a professional summary covering:
@@ -97,63 +92,77 @@ Write a professional summary covering:
 Rules:
 - 200 words maximum
 - Lead with the most important finding
-- Focus on implications not methodology
 - Use bullet points for key facts
+- Focus on implications not methodology
 """
-    professional = generate_text(professional_prompt)
+        explanation = generate_text(prompt)
 
-    print("Generating critical analysis...")
+    elif level == "full":
+        
+        student_prompt = f"""
+You are explaining a research paper to an undergraduate student.
 
-    
-    analysis_prompt = f"""
-You are a senior academic reviewer analyzing a research paper critically.
-
-Paper content:
+Paper:
 {paper_text}
 
-Analyze this paper on these exact points:
+Write a clear explanation covering:
+- Background and why this research was needed
+- Research question and hypothesis  
+- Methodology in plain English
+- Key findings and what they mean
+- How this connects to existing knowledge
+
+Rules:
+- 300-400 words
+- Academic but accessible tone
+"""
+        explanation = generate_text(student_prompt)
+
+        analysis_prompt = f"""
+You are a senior academic reviewer analyzing a research paper.
+
+Paper:
+{paper_text}
+
+Analyze this paper on these points:
 
 ### What This Paper Actually Proves
-Be specific — what can we confidently conclude from this research?
+What can we confidently conclude?
 
 ### What This Paper Does NOT Prove
-What are the limits of these conclusions? What cannot be generalized?
+What are the limits of these conclusions?
 
 ### Limitations the Authors Admit
-What weaknesses do the authors themselves acknowledge?
+What weaknesses do the authors acknowledge?
 
 ### Real World Applications
-How can these findings actually be used in practice?
+How can findings be used in practice?
 
 ### Questions This Paper Raises
-What new research questions does this paper open up?
+What new research questions does it open?
 
-Be honest and specific. Avoid generic statements.
+Be specific and honest. Avoid generic statements.
 """
-    analysis = generate_text(analysis_prompt)
+        analysis = generate_text(analysis_prompt)
 
-    print("Generating key quotes...")
-
-    
-    quotes_prompt = f"""
-From this research paper, extract:
+        facts_prompt = f"""
+From this research paper extract:
 1. The 3 most important statistical findings or numbers
-2. The most significant direct conclusion stated by the authors
+2. The most significant conclusion stated by the authors
 3. The most important limitation mentioned
 
 Paper:
 {paper_text}
 
-Format as a simple list. Be specific and quote actual numbers where possible.
+Format as a simple numbered list. Quote actual numbers where possible.
 """
-    key_facts = generate_text(quotes_prompt)
+        key_facts = generate_text(facts_prompt)
 
     return {
         "topic": topic,
+        "level": level,
         "meta": meta,
-        "eli5": eli5,
-        "student": student,
-        "professional": professional,
+        "explanation": explanation,
         "analysis": analysis,
         "key_facts": key_facts,
     }
