@@ -49,22 +49,13 @@ async def generate_report(data: TopicRequest):
     try:
         if " vs " in data.topic.lower():
             comparison = compare_topics(data.topic)
-            return {
-                "topic": data.topic,
-                "type": "comparison",
-                "result": comparison
-            }
+            return {"topic": data.topic, "type": "comparison", "result": comparison}
 
         try:
             research_result = research_topic(data.topic)
         except Exception as e:
             print("Research error:", e)
-            research_result = {
-                "domain": "General",
-                "source": "Fallback",
-                "data": [],
-                "references": []
-            }
+            research_result = {"domain": "General", "source": "Fallback", "data": [], "references": []}
 
         plan = create_plan(data.topic, data.custom_format)
         sections = write_full_report(data.topic, research_result, plan)
@@ -135,6 +126,7 @@ async def generate_literature_review_route(
 @app.post("/explain-paper")
 async def explain_paper_route(
     topic: str = Form(""),
+    level: str = Form("student"),
     file: UploadFile = File(...)
 ):
     try:
@@ -147,7 +139,7 @@ async def explain_paper_route(
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        result = explain_paper(file_path, topic)
+        result = explain_paper(file_path, topic, level)
 
         try:
             os.remove(file_path)
@@ -177,11 +169,7 @@ def download_pdf(data: DownloadRequest):
         file_path = generate_pdf(data.topic, data.sections)
         if not os.path.exists(file_path):
             raise HTTPException(status_code=500, detail="PDF not generated")
-        return FileResponse(
-            path=file_path,
-            filename="report.pdf",
-            media_type="application/pdf"
-        )
+        return FileResponse(path=file_path, filename="report.pdf", media_type="application/pdf")
     except Exception as e:
         print("PDF error:", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -194,8 +182,7 @@ def download_docx(data: DownloadRequest):
         if not os.path.exists(file_path):
             raise HTTPException(status_code=500, detail="DOCX not generated")
         return FileResponse(
-            path=file_path,
-            filename="report.docx",
+            path=file_path, filename="report.docx",
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         )
     except Exception as e:
