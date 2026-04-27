@@ -20,6 +20,11 @@ const MODES = [
     label: "Literature Review",
     placeholder: "Enter your research topic...",
   },
+  {
+    id: "explainer",
+    label: "Explain Paper",
+    placeholder: "Optional: describe what you want to understand...",
+  },
 ];
 
 const SCRIPT_STYLES = [
@@ -51,9 +56,14 @@ const LOADING_MESSAGES = {
     "Identifying gaps...",
     "Writing review...",
   ],
+  explainer: [
+    "Reading your paper...",
+    "Understanding the research...",
+    "Writing simple explanation...",
+    "Analysing limitations...",
+    "Almost done...",
+  ],
 };
-
-// ── LocalStorage helpers ──────────────────────────────
 
 function loadSessions() {
   try {
@@ -88,8 +98,6 @@ function getPreview(chat) {
   return userMsg?.text?.slice(0, 40) || "New chat";
 }
 
-// ── App ───────────────────────────────────────────────
-
 function App() {
   const [mode, setMode] = useState("research");
   const [input, setInput] = useState("");
@@ -100,12 +108,14 @@ function App() {
   const [showFormat, setShowFormat] = useState(false);
   const [scriptStyle, setScriptStyle] = useState("educational");
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [explainerFile, setExplainerFile] = useState(null);
   const [loadingText, setLoadingText] = useState("Working...");
   const [sessions, setSessions] = useState(loadSessions);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const endRef = useRef(null);
   const fileInputRef = useRef(null);
+  const explainerFileRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -122,10 +132,8 @@ function App() {
     return () => clearInterval(interval);
   }, [loading, mode]);
 
-  // save current chat to session whenever chat updates
   useEffect(() => {
     if (chat.length === 0) return;
-
     setSessions((prev) => {
       const existing = prev.find((s) => s.id === activeSessionId);
       if (existing) {
@@ -142,7 +150,6 @@ function App() {
   }, [chat, lastReport]);
 
   const startNewChat = () => {
-    // save current session first if it has messages
     if (chat.length > 0 && activeSessionId) {
       setSessions((prev) => {
         const updated = prev.map((s) =>
@@ -154,8 +161,6 @@ function App() {
         return updated;
       });
     }
-
-    // create new session
     const newId = Date.now().toString();
     const newSession = {
       id: newId,
@@ -165,18 +170,17 @@ function App() {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
-
     setSessions((prev) => {
       const updated = [newSession, ...prev];
       saveSessions(updated);
       return updated;
     });
-
     setActiveSessionId(newId);
     setChat([]);
     setLastReport(null);
     setInput("");
     setUploadedFiles([]);
+    setExplainerFile(null);
     setCustomFormat("");
     setShowFormat(false);
   };
@@ -188,6 +192,7 @@ function App() {
     setMode(session.mode || "research");
     setInput("");
     setUploadedFiles([]);
+    setExplainerFile(null);
   };
 
   const deleteSession = (e, sessionId) => {
@@ -210,19 +215,29 @@ function App() {
     setLastReport(null);
     setInput("");
     setUploadedFiles([]);
+    setExplainerFile(null);
     setCustomFormat("");
     setShowFormat(false);
     setActiveSessionId(null);
   };
 
   const handleSend = async () => {
-    if (!input.trim()) return;
     if (mode === "literature" && uploadedFiles.length === 0) {
       alert("Please upload at least one PDF file");
       return;
     }
+    if (mode === "explainer" && !explainerFile) {
+      alert("Please upload a PDF to explain");
+      return;
+    }
+    if (!input.trim() && mode !== "explainer") return;
 
-    // create session if none exists
+    const userInput = input || explainerFile?.name || "Explain this paper";
+    setInput("");
+    setChat((prev) => [...prev, { role: "user", text: userInput }]);
+    setLoading(true);
+    setLoadingText(LOADING_MESSAGES[mode][0]);
+
     if (!activeSessionId) {
       const newId = Date.now().toString();
       const newSession = {
@@ -240,12 +255,6 @@ function App() {
       });
       setActiveSessionId(newId);
     }
-
-    const userInput = input;
-    setInput("");
-    setChat((prev) => [...prev, { role: "user", text: userInput }]);
-    setLoading(true);
-    setLoadingText(LOADING_MESSAGES[mode][0]);
 
     try {
       let res, data;
@@ -274,13 +283,11 @@ function App() {
           }),
         });
         data = await res.json();
-
         if (data.type === "comparison") {
           setLastReport(data);
           setChat((prev) => [...prev, { role: "ai", data }]);
           return;
         }
-
         if (!data.sections || Object.keys(data.sections).length === 0) {
           setChat((prev) => [
             ...prev,
@@ -288,7 +295,6 @@ function App() {
           ]);
           return;
         }
-
         setLastReport(data);
         setChat((prev) => [...prev, { role: "ai", data }]);
       } else if (mode === "script") {
@@ -305,6 +311,17 @@ function App() {
         formData.append("topic", userInput);
         uploadedFiles.forEach((file) => formData.append("files", file));
         res = await fetch(`${API}/generate-literature-review`, {
+          method: "POST",
+          body: formData,
+        });
+        data = await res.json();
+        setLastReport(data);
+        setChat((prev) => [...prev, { role: "ai", data }]);
+      } else if (mode === "explainer") {
+        const formData = new FormData();
+        formData.append("topic", userInput);
+        formData.append("file", explainerFile);
+        res = await fetch(`${API}/explain-paper`, {
           method: "POST",
           body: formData,
         });
@@ -332,14 +349,13 @@ function App() {
     else if (Array.isArray(text))
       str = text.map((i) => (typeof i === "string" ? i : "")).join("");
     else return text;
-
     const parts = str.split(/(\[\d+\])/g);
     return parts.map((part, i) => {
       const match = part.match(/\[(\d+)\]/);
       if (match) {
         const refId = parseInt(match[1]);
         const ref = references?.find((r) => r.id === refId);
-        if (ref && ref.url) {
+        if (ref && ref.url)
           return (
             <a
               key={i}
@@ -351,7 +367,6 @@ function App() {
               [{refId}]
             </a>
           );
-        }
         return (
           <span key={i} className="font-mono text-xs text-gray-500">
             [{refId}]
@@ -369,8 +384,10 @@ function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic: lastReport.topic || lastReport.product || "Report",
+          topic: lastReport.topic || "Report",
           sections: lastReport.sections || {},
+          references: lastReport.references || [],
+          domain: lastReport.domain || "",
         }),
       });
       if (!res.ok) {
@@ -465,7 +482,19 @@ function App() {
       </div>
     );
 
-  // group sessions by date
+  const ExplainerBlock = ({ label, content, accent = false }) => (
+    <div className="space-y-3">
+      <h2
+        className={`text-xs font-semibold uppercase tracking-widest border-b pb-2 ${accent ? "text-blue-400 border-blue-400/20" : "text-white border-white/8"}`}
+      >
+        {label}
+      </h2>
+      <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      </div>
+    </div>
+  );
+
   const today = sessions.filter((s) => Date.now() - s.updatedAt < 86400000);
   const yesterday = sessions.filter(
     (s) =>
@@ -477,11 +506,7 @@ function App() {
   const SessionItem = ({ session }) => (
     <div
       onClick={() => loadSession(session)}
-      className={`group flex items-start justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${
-        activeSessionId === session.id
-          ? "bg-white/8 text-white"
-          : "hover:bg-white/4 text-gray-500 hover:text-gray-300"
-      }`}
+      className={`group flex items-start justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${activeSessionId === session.id ? "bg-white/8 text-white" : "hover:bg-white/4 text-gray-500 hover:text-gray-300"}`}
     >
       <div className="flex-1 min-w-0">
         <p className="text-xs truncate">{getPreview(session.chat)}</p>
@@ -531,7 +556,6 @@ function App() {
             + New
           </button>
         </div>
-
         <div className="flex-1 overflow-y-auto p-2 space-y-4">
           {sessions.length === 0 ? (
             <p className="text-xs text-gray-700 px-3 py-4 text-center">
@@ -547,38 +571,30 @@ function App() {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
+      {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* HEADER */}
         <header className="border-b border-white/8 bg-[#0f0f0f] sticky top-0 z-10">
           <div className="px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-4">
-              {/* sidebar toggle */}
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="text-gray-600 hover:text-white transition-colors text-sm"
               >
                 ☰
               </button>
-
-              {/* mode tabs */}
               <div className="flex gap-1">
                 {MODES.map((m) => (
                   <button
                     key={m.id}
                     onClick={() => handleModeChange(m.id)}
-                    className={`text-xs px-3 py-1.5 rounded transition-all ${
-                      mode === m.id
-                        ? "bg-white text-black font-medium"
-                        : "text-gray-500 hover:text-white"
-                    }`}
+                    className={`text-xs px-3 py-1.5 rounded transition-all ${mode === m.id ? "bg-white text-black font-medium" : "text-gray-500 hover:text-white"}`}
                   >
                     {m.label}
                   </button>
                 ))}
               </div>
             </div>
-
             <div className="flex items-center gap-3">
               {lastReport && mode === "research" && (
                 <>
@@ -606,7 +622,7 @@ function App() {
           </div>
         </header>
 
-        {/* CHAT AREA */}
+        {/* CHAT */}
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-10 space-y-10">
             {chat.length === 0 && (
@@ -616,6 +632,8 @@ function App() {
                   {mode === "script" && "What is your next video about?"}
                   {mode === "literature" &&
                     "Upload your papers for a literature review"}
+                  {mode === "explainer" &&
+                    "Upload a research paper to understand it"}
                 </h1>
                 <p className="text-gray-600 text-sm">
                   {mode === "research" &&
@@ -624,6 +642,8 @@ function App() {
                     "Fully researched YouTube script with hook, main points, examples and CTA."}
                   {mode === "literature" &&
                     "Upload research PDFs and get themes, gaps, research questions and hypotheses."}
+                  {mode === "explainer" &&
+                    "Upload any research paper and get simple explanations for beginners, students and professionals — plus what it actually proves."}
                 </p>
               </div>
             )}
@@ -811,28 +831,119 @@ function App() {
                         </div>
                       )}
                       {msg.data.review && (
+                        <ExplainerBlock
+                          label="Literature Review"
+                          content={msg.data.review}
+                        />
+                      )}
+                      {msg.data.research_questions && (
+                        <ExplainerBlock
+                          label="Research Gaps and Questions"
+                          content={msg.data.research_questions}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {/* PAPER EXPLAINER */}
+                  {msg.data?.type === "paper_explainer" && (
+                    <div className="space-y-8">
+                      <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
+                        <span className="uppercase tracking-widest">
+                          Paper Explained
+                        </span>
+                        <button
+                          onClick={() =>
+                            navigator.clipboard.writeText(
+                              `ELI5:\n${msg.data.eli5}\n\nStudent:\n${msg.data.student}\n\nProfessional:\n${msg.data.professional}`,
+                            )
+                          }
+                          className="ml-auto hover:text-gray-400 transition-colors"
+                        >
+                          Copy All
+                        </button>
+                      </div>
+
+                      {/* paper meta */}
+                      {msg.data.meta && (
+                        <div className="bg-white/3 border border-white/8 rounded-lg p-4">
+                          <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">
+                            Paper Details
+                          </p>
+                          <div className="text-sm text-gray-300 whitespace-pre-wrap">
+                            {msg.data.meta}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* key facts */}
+                      {msg.data.key_facts && (
+                        <ExplainerBlock
+                          label="Key Facts and Numbers"
+                          content={msg.data.key_facts}
+                          accent={true}
+                        />
+                      )}
+
+                      {/* 3 explanation levels */}
+                      {msg.data.eli5 && (
                         <div className="space-y-3">
-                          <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
-                            Literature Review
-                          </h2>
+                          <div className="flex items-center gap-3">
+                            <h2 className="text-white text-xs font-semibold uppercase tracking-widest">
+                              Explain Like I am 5
+                            </h2>
+                            <span className="text-xs text-gray-600 border border-white/8 px-2 py-0.5 rounded">
+                              Beginner
+                            </span>
+                          </div>
+                          <div className="border-l-2 border-white/15 pl-4 text-sm text-gray-300 leading-relaxed">
+                            {msg.data.eli5}
+                          </div>
+                        </div>
+                      )}
+
+                      {msg.data.student && (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <h2 className="text-white text-xs font-semibold uppercase tracking-widest">
+                              Student Explanation
+                            </h2>
+                            <span className="text-xs text-gray-600 border border-white/8 px-2 py-0.5 rounded">
+                              Undergraduate
+                            </span>
+                          </div>
                           <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {msg.data.review}
+                              {msg.data.student}
                             </ReactMarkdown>
                           </div>
                         </div>
                       )}
-                      {msg.data.research_questions && (
+
+                      {msg.data.professional && (
                         <div className="space-y-3">
-                          <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
-                            Research Gaps and Questions
-                          </h2>
+                          <div className="flex items-center gap-3">
+                            <h2 className="text-white text-xs font-semibold uppercase tracking-widest">
+                              Professional Summary
+                            </h2>
+                            <span className="text-xs text-gray-600 border border-white/8 px-2 py-0.5 rounded">
+                              Executive
+                            </span>
+                          </div>
                           <div className="text-sm text-gray-300 leading-relaxed prose prose-invert max-w-none">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                              {msg.data.research_questions}
+                              {msg.data.professional}
                             </ReactMarkdown>
                           </div>
                         </div>
+                      )}
+
+                      {/* critical analysis */}
+                      {msg.data.analysis && (
+                        <ExplainerBlock
+                          label="Critical Analysis"
+                          content={msg.data.analysis}
+                        />
                       )}
                     </div>
                   )}
@@ -843,7 +954,6 @@ function App() {
             {loading && (
               <div className="text-sm text-gray-500 italic">{loadingText}</div>
             )}
-
             <div ref={endRef} />
           </div>
         </main>
@@ -877,11 +987,7 @@ function App() {
                   <button
                     key={s}
                     onClick={() => setScriptStyle(s)}
-                    className={`text-xs px-3 py-1 rounded border transition-all capitalize ${
-                      scriptStyle === s
-                        ? "bg-white text-black border-white"
-                        : "border-white/10 text-gray-500 hover:text-white"
-                    }`}
+                    className={`text-xs px-3 py-1 rounded border transition-all capitalize ${scriptStyle === s ? "bg-white text-black border-white" : "border-white/10 text-gray-500 hover:text-white"}`}
                   >
                     {s}
                   </button>
@@ -920,6 +1026,26 @@ function App() {
               </div>
             )}
 
+            {mode === "explainer" && (
+              <div>
+                <input
+                  type="file"
+                  ref={explainerFileRef}
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => setExplainerFile(e.target.files[0] || null)}
+                />
+                <button
+                  onClick={() => explainerFileRef.current.click()}
+                  className="text-xs text-gray-400 hover:text-white border border-white/10 hover:border-white/25 px-4 py-2 rounded-lg transition-all"
+                >
+                  {explainerFile
+                    ? `Selected: ${explainerFile.name}`
+                    : "Upload PDF to explain"}
+                </button>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <input
                 value={input}
@@ -928,18 +1054,16 @@ function App() {
                 placeholder={
                   lastReport && mode === "research"
                     ? "Ask a follow-up question..."
-                    : currentMode.placeholder
+                    : mode === "explainer"
+                      ? "Optional: what do you want to understand about this paper?"
+                      : currentMode.placeholder
                 }
                 className="flex-1 bg-transparent border border-white/10 focus:border-white/25 px-4 py-3 rounded-lg outline-none text-white placeholder-gray-600 text-sm transition-colors"
               />
               <button
                 onClick={handleSend}
                 disabled={loading}
-                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${
-                  loading
-                    ? "text-gray-600 border border-white/8 cursor-not-allowed"
-                    : "text-white bg-white/10 hover:bg-white/15 border border-white/15"
-                }`}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${loading ? "text-gray-600 border border-white/8 cursor-not-allowed" : "text-white bg-white/10 hover:bg-white/15 border border-white/15"}`}
               >
                 {loading ? "Working..." : "Send"}
               </button>
