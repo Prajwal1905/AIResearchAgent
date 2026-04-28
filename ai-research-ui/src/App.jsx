@@ -25,6 +25,11 @@ const MODES = [
     label: "Explain Paper",
     placeholder: "Optional: describe what you want to understand...",
   },
+  {
+    id: "pdfchat",
+    label: "Chat With PDF",
+    placeholder: "Ask anything about your document...",
+  },
 ];
 
 const SCRIPT_STYLES = [
@@ -63,6 +68,7 @@ const LOADING_MESSAGES = {
     "Analysing limitations...",
     "Almost done...",
   ],
+  pdfchat: ["Reading document...", "Finding answer...", "Almost done..."],
 };
 
 function loadSessions() {
@@ -114,9 +120,18 @@ function App() {
   const [sessions, setSessions] = useState(loadSessions);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // pdf chat specific state
+  const [pdfChatFile, setPdfChatFile] = useState(null);
+  const [pdfContent, setPdfContent] = useState("");
+  const [pdfFilename, setPdfFilename] = useState("");
+  const [pdfChatHistory, setPdfChatHistory] = useState([]);
+  const [pdfUploading, setPdfUploading] = useState(false);
+
   const endRef = useRef(null);
   const fileInputRef = useRef(null);
   const explainerFileRef = useRef(null);
+  const pdfChatFileRef = useRef(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -182,6 +197,10 @@ function App() {
     setInput("");
     setUploadedFiles([]);
     setExplainerFile(null);
+    setPdfChatFile(null);
+    setPdfContent("");
+    setPdfFilename("");
+    setPdfChatHistory([]);
     setCustomFormat("");
     setShowFormat(false);
   };
@@ -194,6 +213,10 @@ function App() {
     setInput("");
     setUploadedFiles([]);
     setExplainerFile(null);
+    setPdfChatFile(null);
+    setPdfContent("");
+    setPdfFilename("");
+    setPdfChatHistory([]);
   };
 
   const deleteSession = (e, sessionId) => {
@@ -217,9 +240,53 @@ function App() {
     setInput("");
     setUploadedFiles([]);
     setExplainerFile(null);
+    setPdfChatFile(null);
+    setPdfContent("");
+    setPdfFilename("");
+    setPdfChatHistory([]);
     setCustomFormat("");
     setShowFormat(false);
     setActiveSessionId(null);
+  };
+
+  const handlePdfChatUpload = async (file) => {
+    if (!file) return;
+    setPdfUploading(true);
+    setPdfChatFile(file);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch(`${API}/upload-pdf-chat`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      if (data.error) {
+        alert("Error reading PDF: " + data.error);
+        setPdfChatFile(null);
+        return;
+      }
+
+      setPdfContent(data.content);
+      setPdfFilename(data.filename);
+
+      
+      setChat([
+        {
+          role: "ai",
+          text: `Document loaded: **${data.filename}**\n\n${data.summary}\n\n---\n*Ask me anything about this document.*`,
+        },
+      ]);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to upload PDF");
+      setPdfChatFile(null);
+    } finally {
+      setPdfUploading(false);
+    }
   };
 
   const handleSend = async () => {
@@ -229,6 +296,10 @@ function App() {
     }
     if (mode === "explainer" && !explainerFile) {
       alert("Please upload a PDF to explain");
+      return;
+    }
+    if (mode === "pdfchat" && !pdfContent) {
+      alert("Please upload a PDF first");
       return;
     }
     if (!input.trim() && mode !== "explainer") return;
@@ -330,6 +401,22 @@ function App() {
         data = await res.json();
         setLastReport(data);
         setChat((prev) => [...prev, { role: "ai", data }]);
+      } else if (mode === "pdfchat") {
+        res = await fetch(`${API}/chat-with-pdf`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: userInput,
+            content: pdfContent,
+            history: pdfChatHistory.slice(-5),
+          }),
+        });
+        data = await res.json();
+
+        const answer = data.answer || "No answer returned.";
+
+        setPdfChatHistory((prev) => [...prev, { question: userInput, answer }]);
+        setChat((prev) => [...prev, { role: "ai", text: answer }]);
       }
     } catch (err) {
       console.error(err);
@@ -558,8 +645,9 @@ function App() {
           )}
         </div>
       </aside>
-
+     
       <div className="flex-1 flex flex-col min-w-0">
+      
         <header className="border-b border-white/8 bg-[#0f0f0f] sticky top-0 z-10">
           <div className="px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -569,7 +657,7 @@ function App() {
               >
                 ☰
               </button>
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {MODES.map((m) => (
                   <button
                     key={m.id}
@@ -607,7 +695,6 @@ function App() {
             </div>
           </div>
         </header>
-
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-3xl mx-auto px-8 py-10 space-y-10">
             {chat.length === 0 && (
@@ -619,6 +706,7 @@ function App() {
                     "Upload your papers for a literature review"}
                   {mode === "explainer" &&
                     "Upload a research paper to understand it"}
+                  {mode === "pdfchat" && "Chat with any PDF document"}
                 </h1>
                 <p className="text-gray-600 text-sm">
                   {mode === "research" &&
@@ -628,7 +716,9 @@ function App() {
                   {mode === "literature" &&
                     "Upload research PDFs and get themes, gaps, research questions and hypotheses."}
                   {mode === "explainer" &&
-                    "Upload any research paper and get explanation at your chosen level — beginner, student, professional or full analysis."}
+                    "Upload any research paper and get explanation at your chosen level."}
+                  {mode === "pdfchat" &&
+                    "Upload any PDF — research paper, textbook, report, contract — and ask questions about it in plain English."}
                 </p>
               </div>
             )}
@@ -642,6 +732,7 @@ function App() {
                 </div>
               ) : (
                 <div key={i} className="space-y-8">
+                  
                   {msg.text && (
                     <div className="text-sm text-gray-300 leading-relaxed">
                       <ReactMarkdown
@@ -657,13 +748,22 @@ function App() {
                               </p>
                             );
                           },
+                          strong({ children }) {
+                            return (
+                              <strong className="text-white font-semibold">
+                                {children}
+                              </strong>
+                            );
+                          },
+                          hr() {
+                            return <hr className="border-white/10 my-4" />;
+                          },
                         }}
                       >
                         {msg.text}
                       </ReactMarkdown>
                     </div>
                   )}
-
                   {msg.data?.type === "research" && (
                     <div className="space-y-8">
                       <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
@@ -837,7 +937,6 @@ function App() {
                       )}
                     </div>
                   )}
-
                   {msg.data?.type === "paper_explainer" && (
                     <div className="space-y-8">
                       <div className="flex gap-4 text-xs text-gray-600 border-b border-white/5 pb-4">
@@ -858,7 +957,6 @@ function App() {
                           Copy
                         </button>
                       </div>
-
                       {msg.data.meta && (
                         <div className="bg-white/3 border border-white/8 rounded-lg p-4">
                           <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">
@@ -869,7 +967,6 @@ function App() {
                           </div>
                         </div>
                       )}
-
                       {msg.data.key_facts && (
                         <div className="space-y-3">
                           <h2 className="text-blue-400 text-xs font-semibold uppercase tracking-widest border-b border-blue-400/20 pb-2">
@@ -882,7 +979,6 @@ function App() {
                           </div>
                         </div>
                       )}
-
                       {msg.data.explanation && (
                         <div className="space-y-3">
                           <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
@@ -900,7 +996,6 @@ function App() {
                           </div>
                         </div>
                       )}
-
                       {msg.data.analysis && (
                         <div className="space-y-3">
                           <h2 className="text-white text-xs font-semibold uppercase tracking-widest border-b border-white/8 pb-2">
@@ -1033,6 +1128,47 @@ function App() {
               </div>
             )}
 
+          
+            {mode === "pdfchat" && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  ref={pdfChatFileRef}
+                  accept=".pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    if (e.target.files[0])
+                      handlePdfChatUpload(e.target.files[0]);
+                  }}
+                />
+                <button
+                  onClick={() => pdfChatFileRef.current.click()}
+                  disabled={pdfUploading}
+                  className={`text-xs border px-4 py-2 rounded-lg transition-all ${pdfContent ? "text-green-400 border-green-400/30 bg-green-400/5" : "text-gray-400 hover:text-white border-white/10 hover:border-white/25"}`}
+                >
+                  {pdfUploading
+                    ? "Reading PDF..."
+                    : pdfContent
+                      ? `Loaded: ${pdfFilename}`
+                      : "Upload PDF to chat with"}
+                </button>
+                {pdfContent && (
+                  <button
+                    onClick={() => {
+                      setPdfContent("");
+                      setPdfFilename("");
+                      setPdfChatFile(null);
+                      setPdfChatHistory([]);
+                      setChat([]);
+                    }}
+                    className="text-xs text-gray-600 hover:text-red-400 transition-colors"
+                  >
+                    Change PDF
+                  </button>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3">
               <input
                 value={input}
@@ -1043,14 +1179,19 @@ function App() {
                     ? "Ask a follow-up question..."
                     : mode === "explainer"
                       ? "Optional: what do you want to understand about this paper?"
-                      : currentMode.placeholder
+                      : mode === "pdfchat" && pdfContent
+                        ? "Ask anything about your document..."
+                        : mode === "pdfchat"
+                          ? "Upload a PDF first, then ask questions..."
+                          : currentMode.placeholder
                 }
-                className="flex-1 bg-transparent border border-white/10 focus:border-white/25 px-4 py-3 rounded-lg outline-none text-white placeholder-gray-600 text-sm transition-colors"
+                disabled={mode === "pdfchat" && !pdfContent}
+                className="flex-1 bg-transparent border border-white/10 focus:border-white/25 px-4 py-3 rounded-lg outline-none text-white placeholder-gray-600 text-sm transition-colors disabled:opacity-40"
               />
               <button
                 onClick={handleSend}
-                disabled={loading}
-                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${loading ? "text-gray-600 border border-white/8 cursor-not-allowed" : "text-white bg-white/10 hover:bg-white/15 border border-white/15"}`}
+                disabled={loading || (mode === "pdfchat" && !pdfContent)}
+                className={`px-6 py-3 rounded-lg text-sm font-medium transition-all ${loading || (mode === "pdfchat" && !pdfContent) ? "text-gray-600 border border-white/8 cursor-not-allowed" : "text-white bg-white/10 hover:bg-white/15 border border-white/15"}`}
               >
                 {loading ? "Working..." : "Send"}
               </button>
