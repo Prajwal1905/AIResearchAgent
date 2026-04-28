@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from typing import List, Union
+from pydantic import BaseModel
 import os
 import shutil
 import uuid
@@ -10,7 +11,8 @@ from app.schemas.request import (
     TopicRequest,
     FollowUpRequest,
     DownloadRequest,
-    ScriptRequest
+    ScriptRequest,
+    PdfChatRequest
 )
 from app.agents.writer import write_full_report, generate_critical_analysis
 from app.agents.researcher import research_topic
@@ -21,6 +23,7 @@ from app.agents.planner import create_plan
 from app.agents.script_generator import generate_script
 from app.agents.literature_reviewer import generate_literature_review
 from app.agents.paper_explainer import explain_paper
+from app.agents.pdf_chat import start_pdf_chat, chat_with_pdf
 from app.utils.pdf_generator import generate_pdf
 from app.utils.docx_generator import generate_docx
 
@@ -150,6 +153,48 @@ async def explain_paper_route(
 
     except Exception as e:
         print("Paper explainer error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/upload-pdf-chat")
+async def upload_pdf_chat(file: UploadFile = File(...)):
+    """Upload a PDF and get its content + summary for chat."""
+    try:
+        if not file.filename.endswith(".pdf"):
+            raise HTTPException(status_code=400, detail="Please upload a PDF file")
+
+        unique_name = f"{uuid.uuid4()}_{file.filename}"
+        file_path = os.path.join(UPLOAD_DIR, unique_name)
+
+        with open(file_path, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        result = start_pdf_chat(file_path)
+
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+
+        return {"type": "pdf_chat_ready", "filename": file.filename, **result}
+
+    except Exception as e:
+        print("PDF chat upload error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/chat-with-pdf")
+async def chat_with_pdf_route(data: PdfChatRequest):
+    """Answer a question about an already-uploaded PDF."""
+    try:
+        answer = chat_with_pdf(data.question, data.content, data.history)
+        return {
+            "type": "pdf_chat_answer",
+            "question": data.question,
+            "answer": answer
+        }
+    except Exception as e:
+        print("PDF chat error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
