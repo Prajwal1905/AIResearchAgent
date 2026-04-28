@@ -12,7 +12,7 @@ from app.schemas.request import (
     FollowUpRequest,
     DownloadRequest,
     ScriptRequest,
-    PdfChatRequest
+    FileChatRequest
 )
 from app.agents.writer import write_full_report, generate_critical_analysis
 from app.agents.researcher import research_topic
@@ -23,7 +23,8 @@ from app.agents.planner import create_plan
 from app.agents.script_generator import generate_script
 from app.agents.literature_reviewer import generate_literature_review
 from app.agents.paper_explainer import explain_paper
-from app.agents.pdf_chat import start_pdf_chat, chat_with_pdf
+from app.agents.pdf_chat import start_file_chat, chat_with_file
+from app.services.file_reader import is_supported
 from app.utils.pdf_generator import generate_pdf
 from app.utils.docx_generator import generate_docx
 
@@ -157,11 +158,14 @@ async def explain_paper_route(
 
 
 @app.post("/upload-pdf-chat")
-async def upload_pdf_chat(file: UploadFile = File(...)):
-    """Upload a PDF and get its content + summary for chat."""
+async def upload_file_chat(file: UploadFile = File(...)):
+   
     try:
-        if not file.filename.endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="Please upload a PDF file")
+        if not is_supported(file.filename):
+            raise HTTPException(
+                status_code=400,
+                detail="Unsupported file type. Supported: PDF, DOCX, TXT, PPTX, XLSX, CSV, EPUB"
+            )
 
         unique_name = f"{uuid.uuid4()}_{file.filename}"
         file_path = os.path.join(UPLOAD_DIR, unique_name)
@@ -169,32 +173,37 @@ async def upload_pdf_chat(file: UploadFile = File(...)):
         with open(file_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        result = start_pdf_chat(file_path)
+        result = start_file_chat(file_path, file.filename)
 
         try:
             os.remove(file_path)
         except Exception:
             pass
 
+        if "error" in result:
+            raise HTTPException(status_code=400, detail=result["error"])
+
         return {"type": "pdf_chat_ready", "filename": file.filename, **result}
 
+    except HTTPException:
+        raise
     except Exception as e:
-        print("PDF chat upload error:", e)
+        print("File chat upload error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/chat-with-pdf")
-async def chat_with_pdf_route(data: PdfChatRequest):
-    """Answer a question about an already-uploaded PDF."""
+async def chat_with_pdf_route(data: FileChatRequest):
+    
     try:
-        answer = chat_with_pdf(data.question, data.content, data.history)
+        answer = chat_with_file(data.question, data.content, data.history)
         return {
             "type": "pdf_chat_answer",
             "question": data.question,
             "answer": answer
         }
     except Exception as e:
-        print("PDF chat error:", e)
+        print("File chat error:", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
