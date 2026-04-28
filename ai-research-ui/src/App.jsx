@@ -121,11 +121,11 @@ function App() {
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // pdf chat specific state
   const [pdfChatFile, setPdfChatFile] = useState(null);
   const [pdfContent, setPdfContent] = useState("");
   const [pdfFilename, setPdfFilename] = useState("");
   const [pdfChatHistory, setPdfChatHistory] = useState([]);
+  const [pdfImages, setPdfImages] = useState([]);
   const [pdfUploading, setPdfUploading] = useState(false);
 
   const endRef = useRef(null);
@@ -201,6 +201,7 @@ function App() {
     setPdfContent("");
     setPdfFilename("");
     setPdfChatHistory([]);
+    setPdfImages([]);
     setCustomFormat("");
     setShowFormat(false);
   };
@@ -272,12 +273,17 @@ function App() {
 
       setPdfContent(data.content);
       setPdfFilename(data.filename);
+      setPdfImages(data.images || []);
 
-      
+      const imageNote =
+        data.image_count > 0
+          ? `\n\nThis document contains **${data.image_count} figure(s)**. You can ask me to explain any diagram or figure.`
+          : "";
+
       setChat([
         {
           role: "ai",
-          text: `Document loaded: **${data.filename}**\n\n${data.summary}\n\n---\n*Ask me anything about this document.*`,
+          text: `**${data.filename}** loaded successfully.\n\n${data.summary}${imageNote}\n\n---\n*Ask me anything about this document.*`,
         },
       ]);
     } catch (e) {
@@ -409,6 +415,7 @@ function App() {
             question: userInput,
             content: pdfContent,
             history: pdfChatHistory.slice(-5),
+            images: pdfImages
           }),
         });
         data = await res.json();
@@ -645,9 +652,8 @@ function App() {
           )}
         </div>
       </aside>
-     
+
       <div className="flex-1 flex flex-col min-w-0">
-      
         <header className="border-b border-white/8 bg-[#0f0f0f] sticky top-0 z-10">
           <div className="px-6 py-4 flex justify-between items-center">
             <div className="flex items-center gap-4">
@@ -732,7 +738,6 @@ function App() {
                 </div>
               ) : (
                 <div key={i} className="space-y-8">
-                  
                   {msg.text && (
                     <div className="text-sm text-gray-300 leading-relaxed">
                       <ReactMarkdown
@@ -1128,7 +1133,6 @@ function App() {
               </div>
             )}
 
-          
             {mode === "pdfchat" && (
               <div className="flex items-center gap-3">
                 <input
@@ -1159,6 +1163,7 @@ function App() {
                       setPdfFilename("");
                       setPdfChatFile(null);
                       setPdfChatHistory([]);
+                      setPdfImages([]);
                       setChat([]);
                     }}
                     className="text-xs text-gray-600 hover:text-red-400 transition-colors"
