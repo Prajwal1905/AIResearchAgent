@@ -2,7 +2,6 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from typing import List, Union
-from pydantic import BaseModel
 import os
 import shutil
 import uuid
@@ -159,7 +158,7 @@ async def explain_paper_route(
 
 @app.post("/upload-pdf-chat")
 async def upload_file_chat(file: UploadFile = File(...)):
-   
+    
     try:
         if not is_supported(file.filename):
             raise HTTPException(
@@ -196,7 +195,15 @@ async def upload_file_chat(file: UploadFile = File(...)):
 async def chat_with_pdf_route(data: FileChatRequest):
     
     try:
-        answer = chat_with_file(data.question, data.content, data.history)
+        
+        images = data.images if hasattr(data, "images") else []
+
+        answer = chat_with_file(
+            question=data.question,
+            content=data.content,
+            history=data.history,
+            images=images
+        )
         return {
             "type": "pdf_chat_answer",
             "question": data.question,
