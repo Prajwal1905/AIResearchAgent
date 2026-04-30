@@ -1,5 +1,5 @@
 import requests
-from app.core.config import BRAVE_API_KEY
+from app.core.config import TAVILY_API_KEY
 
 
 def search_web(query: str, max_results: int = 5):
@@ -7,27 +7,29 @@ def search_web(query: str, max_results: int = 5):
     if not query:
         return []
 
-    url = "https://api.search.brave.com/res/v1/web/search"
-
-    headers = {
-        "Accept": "application/json",
-        "X-Subscription-Token": BRAVE_API_KEY
-    }
-
-    params = {
-        "q": query,
-        "count": max_results
-    }
-
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=10)
+        response = requests.post(
+            "https://api.tavily.com/search",
+            json={
+                "api_key": TAVILY_API_KEY,
+                "query": query,
+                "max_results": max_results,
+                "search_depth": "advanced",  
+                "include_answer": False,
+            },
+            timeout=15
+        )
 
         if response.status_code != 200:
-            print("Brave Search error:", response.status_code)
+            print("Tavily search failed:", response.status_code)
             return []
 
         data = response.json()
-        raw_results = data.get("web", {}).get("results", [])
+        raw_results = data.get("results", [])
+
+        if not raw_results:
+            print("Tavily returned no results for:", query)
+            return []
 
         results = []
         for item in raw_results:
@@ -35,10 +37,11 @@ def search_web(query: str, max_results: int = 5):
                 "title": item.get("title", ""),
                 "url": item.get("url", ""),
                 "source": "web",
-                "date": item.get("page_age", ""),
-                "snippet": item.get("description", "")
+                "date": item.get("published_date", ""),
+                "snippet": item.get("content", "")  
             })
 
+        print(f"Tavily returned {len(results)} results for: {query}")
         return results
 
     except Exception as e:
